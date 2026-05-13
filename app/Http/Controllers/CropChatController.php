@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Http;
 
 class CropChatController extends Controller
 {
-    private const CROP_WEBHOOK_URL = 'https://valtmar.app.n8n.cloud/webhook-test/crop-chat';
+    private const CROP_WEBHOOK_URL = 'http://77.243.80.191:5678/webhook-test/crop-chat';
 
     public function sessions()
     {
@@ -123,7 +123,8 @@ class CropChatController extends Controller
             'mediaType' => $mediaType,
             'history'   => json_encode($historyForN8n, JSON_UNESCAPED_UNICODE),
             'sessionId' => (string) $session->id,
-             'zone'      => $zoneContext,
+            'zone'      => $zoneContext,
+            'user_id'   => $user->id,
         ]);
 
         $n8nData = $n8nResp->json();
