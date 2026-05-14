@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Http;
 class N8nProxyController extends Controller
 {
     private const WEBHOOK_URL      = 'https://valtmar.app.n8n.cloud/webhook/AgroFireshield';
-    private const CROP_WEBHOOK_URL = 'http://77.243.80.191:5678/webhook/crop-chat';
+    private const CROP_WEBHOOK_URL = 'http://77.243.80.191:5678/webhook-test/crop-chat';
 
     public function analyze(Request $request)
     {
