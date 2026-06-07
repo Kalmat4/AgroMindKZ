@@ -280,3 +280,20 @@ function anomalyLabel(type) {
     font-style: italic;
 }
 </style>
+
+<style>
+html[data-theme="light"] .subs-bg          { background: var(--afs-bg) !important; }
+html[data-theme="light"] .subs-page-title  { color: var(--afs-text); }
+html[data-theme="light"] .subs-card        { background: #ffffff; border-color: var(--afs-border); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+html[data-theme="light"] .subs-card__label { color: var(--afs-muted); }
+html[data-theme="light"] .subs-card__value { color: var(--afs-accent2); }
+html[data-theme="light"] .subs-section__title  { color: var(--afs-text); border-bottom-color: var(--afs-border); }
+html[data-theme="light"] .subs-table-wrap      { border-color: var(--afs-border); }
+html[data-theme="light"] .subs-table           { background: #ffffff; }
+html[data-theme="light"] .subs-table thead tr  { background: var(--afs-bg5); }
+html[data-theme="light"] .subs-table th        { color: var(--afs-text2); border-bottom-color: var(--afs-border); }
+html[data-theme="light"] .subs-table tbody tr  { background: #ffffff; border-bottom-color: #eaf3eb; }
+html[data-theme="light"] .subs-table tbody tr:hover { background: var(--afs-bg5); }
+html[data-theme="light"] .subs-table td        { color: var(--afs-text2); }
+html[data-theme="light"] .subs-table__empty    { color: var(--afs-muted); }
+</style>

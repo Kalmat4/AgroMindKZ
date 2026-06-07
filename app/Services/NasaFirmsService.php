@@ -9,7 +9,7 @@ class NasaFirmsService
 {
     private const MAP_KEY = 'd445b78e682ba7959cbf75bd1c3dbc8d';
     private const SOURCE  = 'VIIRS_SNPP_NRT';
-    private const DAYS    = 1;
+    private const DAYS    = 2;
 
     public function getHotspots(float $west, float $south, float $east, float $north): array
     {

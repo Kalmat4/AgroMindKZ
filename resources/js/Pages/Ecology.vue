@@ -407,3 +407,29 @@ function waterClass(stress) {
     margin-top: 4px;
 }
 </style>
+
+<style>
+html[data-theme="light"] .eco-bg           { background: var(--afs-bg) !important; }
+html[data-theme="light"] .eco-page-title   { color: var(--afs-text); }
+html[data-theme="light"] .eco-card         { background: #ffffff; border-color: var(--afs-border); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+html[data-theme="light"] .eco-card__label  { color: var(--afs-muted); }
+html[data-theme="light"] .eco-card__value  { color: var(--afs-text); }
+html[data-theme="light"] .eco-section__title   { color: var(--afs-text); border-bottom-color: var(--afs-border); }
+html[data-theme="light"] .eco-table-wrap       { border-color: var(--afs-border); }
+html[data-theme="light"] .eco-table            { background: #ffffff; }
+html[data-theme="light"] .eco-table thead tr   { background: var(--afs-bg5); }
+html[data-theme="light"] .eco-table th         { color: var(--afs-text2); border-bottom-color: var(--afs-border); }
+html[data-theme="light"] .eco-table tbody tr   { background: #ffffff; border-bottom-color: #eaf3eb; }
+html[data-theme="light"] .eco-table tbody tr:hover { background: var(--afs-bg5); }
+html[data-theme="light"] .eco-table td         { color: var(--afs-text2); }
+html[data-theme="light"] .eco-table__empty     { color: var(--afs-muted); }
+html[data-theme="light"] .eco-region-name      { color: var(--afs-accent2); }
+html[data-theme="light"] .eco-val--normal      { color: var(--afs-text2); }
+html[data-theme="light"] .eco-calc             { background: #ffffff; border-color: var(--afs-border); }
+html[data-theme="light"] .eco-calc__label      { color: var(--afs-text2); }
+html[data-theme="light"] .eco-calc__select,
+html[data-theme="light"] .eco-calc__input      { background: var(--afs-bg3); color: var(--afs-text); border-color: var(--afs-border); }
+html[data-theme="light"] .eco-calc__select option { background: #ffffff; color: #1a2e1d; }
+html[data-theme="light"] .eco-calc__result     { background: var(--afs-bg3); border-color: var(--afs-border); color: var(--afs-muted); }
+html[data-theme="light"] .eco-calc__result--active { background: var(--afs-bg5); border-color: var(--afs-accent2); color: var(--afs-text); }
+</style>

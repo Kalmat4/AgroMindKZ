@@ -1,1 +1,42 @@
 @import 'bootstrap/dist/css/bootstrap.min.css';
+
+/* ── Theme CSS variables ─────────────────────────────────────────────────── */
+:root {
+    --afs-bg:          #070d08;
+    --afs-bg2:         #161616;
+    --afs-bg3:         #1a1a1a;
+    --afs-bg4:         #0d1f10;
+    --afs-bg5:         #1e2a20;
+    --afs-text:        #e0d6cc;
+    --afs-text2:       #c8bfb5;
+    --afs-muted:       #888;
+    --afs-muted2:      #555;
+    --afs-accent:      #00e676;
+    --afs-accent2:     #00c853;
+    --afs-border:      #2d2d2d;
+    --afs-dim:         rgba(0, 230, 118, 0.12);
+    --afs-dim2:        rgba(0, 230, 118, 0.06);
+    --afs-shadow:      rgba(0, 230, 118, 0.25);
+    --afs-header-bg:   linear-gradient(135deg, #080d09 0%, #0b2014 100%);
+    --afs-header-bdr:  #00e676;
+}
+
+[data-theme="light"] {
+    --afs-bg:          #f2f6f2;
+    --afs-bg2:         #ffffff;
+    --afs-bg3:         #f8faf8;
+    --afs-bg4:         #ffffff;
+    --afs-bg5:         #e6f4ea;
+    --afs-text:        #1a2e1d;
+    --afs-text2:       #3d5c42;
+    --afs-muted:       #6b8570;
+    --afs-muted2:      #9ab0a0;
+    --afs-accent:      #00a550;
+    --afs-accent2:     #007a3a;
+    --afs-border:      #c4ddc8;
+    --afs-dim:         rgba(0, 165, 80, 0.10);
+    --afs-dim2:        rgba(0, 165, 80, 0.05);
+    --afs-shadow:      rgba(0, 165, 80, 0.18);
+    --afs-header-bg:   linear-gradient(135deg, #ffffff 0%, #e8f5e9 100%);
+    --afs-header-bdr:  #00a550;
+}

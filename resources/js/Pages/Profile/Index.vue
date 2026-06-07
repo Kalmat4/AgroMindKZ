@@ -311,3 +311,16 @@ const logout = () => {
     cursor: not-allowed;
 }
 </style>
+
+<style>
+html[data-theme="light"] .afs-main          { background: var(--afs-bg) !important; }
+html[data-theme="light"] .afs-page-title h1 { color: var(--afs-text); }
+html[data-theme="light"] .afs-page-title p  { color: var(--afs-muted); }
+html[data-theme="light"] .afs-card          { background: #ffffff; border-color: var(--afs-border); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+html[data-theme="light"] .afs-card__header  { border-bottom-color: var(--afs-border); }
+html[data-theme="light"] .afs-card__header h2 { color: var(--afs-text); }
+html[data-theme="light"] .afs-field label   { color: var(--afs-text2); }
+html[data-theme="light"] .afs-field input   { background: var(--afs-bg3); color: var(--afs-text); border-color: var(--afs-border); }
+html[data-theme="light"] .afs-field input::placeholder { color: var(--afs-muted2); }
+html[data-theme="light"] .afs-field input:focus { border-color: var(--afs-accent2); }
+</style>

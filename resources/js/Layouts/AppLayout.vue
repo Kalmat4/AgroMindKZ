@@ -1,8 +1,10 @@
 <script setup>
 import { Link, router } from '@inertiajs/vue3'
 import { useI18n } from 'vue-i18n'
+import { useTheme } from '@/composables/useTheme'
 
 const { t, locale } = useI18n()
+const { isDark, toggle } = useTheme()
 
 const logout = () => { router.post('/logout') }
 
@@ -13,7 +15,7 @@ const setLocale = (lang) => {
 </script>
 
 <template>
-    <div class="min-vh-100" style="background: #070d08;">
+    <div class="afs-root">
         <header class="afs-header">
             <div class="afs-header__inner">
                 <Link href="/dashboard" class="afs-logo">
@@ -38,6 +40,12 @@ const setLocale = (lang) => {
                         >{{ lang.toUpperCase() }}</button>
                     </div>
 
+                    <!-- Theme toggle -->
+                    <button class="afs-theme-toggle" @click="toggle" :title="isDark ? 'Дневная тема' : 'Ночная тема'">
+                        <span v-if="isDark">☀️</span>
+                        <span v-else>🌙</span>
+                    </button>
+
                     <button class="afs-nav__logout" @click="logout">{{ t('nav.logout') }}</button>
                 </nav>
             </div>
@@ -47,13 +55,21 @@ const setLocale = (lang) => {
 </template>
 
 <style scoped>
+.afs-root {
+    min-height: 100vh;
+    background: var(--afs-bg);
+    color: var(--afs-text);
+    transition: background 0.25s, color 0.25s;
+}
+
 .afs-header {
-    background: linear-gradient(135deg, #080d09 0%, #0b2014 100%);
-    border-bottom: 3px solid #00e676;
-    box-shadow: 0 2px 20px rgba(0, 230, 118, 0.25);
+    background: var(--afs-header-bg);
+    border-bottom: 3px solid var(--afs-header-bdr);
+    box-shadow: 0 2px 20px var(--afs-shadow);
     position: sticky;
     top: 0;
     z-index: 1000;
+    transition: background 0.25s, box-shadow 0.25s;
 }
 
 .afs-header__inner {
@@ -75,14 +91,15 @@ const setLocale = (lang) => {
 
 .afs-logo__icon {
     font-size: 28px;
-    filter: drop-shadow(0 0 8px rgba(0, 230, 118, 0.9));
+    filter: drop-shadow(0 0 8px var(--afs-shadow));
 }
 
 .afs-logo__text {
     font-size: 20px;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--afs-text);
     letter-spacing: 0.5px;
+    transition: color 0.25s;
 }
 
 .afs-nav {
@@ -98,7 +115,7 @@ const setLocale = (lang) => {
     border-radius: 8px;
     font-size: 14px;
     font-weight: 500;
-    color: #a8d5b5;
+    color: var(--afs-text2);
     text-decoration: none;
     border: 1px solid transparent;
     transition: background 0.18s, color 0.18s, box-shadow 0.18s;
@@ -106,10 +123,10 @@ const setLocale = (lang) => {
 
 .afs-nav__btn:hover,
 .afs-nav__btn.router-link-active {
-    background: rgba(0, 230, 118, 0.12);
-    color: #00e676;
-    border-color: rgba(0, 230, 118, 0.35);
-    box-shadow: 0 0 8px rgba(0, 230, 118, 0.15);
+    background: var(--afs-dim);
+    color: var(--afs-accent);
+    border-color: var(--afs-shadow);
+    box-shadow: 0 0 8px var(--afs-dim);
 }
 
 .afs-nav__logout {
@@ -119,17 +136,39 @@ const setLocale = (lang) => {
     border-radius: 8px;
     font-size: 14px;
     font-weight: 500;
-    color: #a8d5b5;
+    color: var(--afs-text2);
     background: transparent;
-    border: 1px solid rgba(168, 213, 181, 0.25);
+    border: 1px solid var(--afs-border);
     cursor: pointer;
     transition: background 0.18s, color 0.18s;
 }
 
 .afs-nav__logout:hover {
-    background: rgba(0, 230, 118, 0.12);
-    color: #00e676;
-    border-color: rgba(0, 230, 118, 0.4);
+    background: var(--afs-dim);
+    color: var(--afs-accent);
+    border-color: var(--afs-accent2);
+}
+
+/* ── Theme toggle ── */
+.afs-theme-toggle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--afs-dim);
+    border: 1px solid var(--afs-border);
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.18s, border-color 0.18s, transform 0.18s;
+    flex-shrink: 0;
+}
+
+.afs-theme-toggle:hover {
+    background: var(--afs-dim);
+    border-color: var(--afs-accent);
+    transform: scale(1.1);
 }
 
 /* ── Language switcher ── */
@@ -137,11 +176,12 @@ const setLocale = (lang) => {
     display: flex;
     align-items: center;
     gap: 2px;
-    background: rgba(0, 230, 118, 0.06);
-    border: 1px solid rgba(0, 230, 118, 0.2);
+    background: var(--afs-dim2);
+    border: 1px solid var(--afs-border);
     border-radius: 8px;
     padding: 3px;
-    margin: 0 8px;
+    margin: 0 4px;
+    transition: background 0.25s, border-color 0.25s;
 }
 
 .lang-btn {
@@ -149,18 +189,18 @@ const setLocale = (lang) => {
     border-radius: 6px;
     font-size: 12px;
     font-weight: 600;
-    color: #a8d5b5;
+    color: var(--afs-text2);
     background: transparent;
     border: none;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: color 0.15s, background 0.15s;
     letter-spacing: 0.5px;
 }
 
-.lang-btn:hover { color: #00e676; }
+.lang-btn:hover { color: var(--afs-accent); }
 
 .lang-btn.active {
-    background: rgba(0, 230, 118, 0.2);
-    color: #00e676;
+    background: var(--afs-dim);
+    color: var(--afs-accent);
 }
 </style>
