@@ -24,30 +24,74 @@ const props = defineProps({
     sessionId: { type: String, default: '' },
 })
 
-// ── Oblast data ───────────────────────────────────────────────────────────────
-// Порядок важен: последний добавленный слой перехватывает клики первым.
-// Большие фоновые регионы — первыми; более приоритетные — позже.
-const OBLASTS = [
-    { name: 'Жамбылская', west: 67.5, south: 42.5, east: 75.5, north: 46.5 },
-    { name: 'Кызылординская', west: 57.0, south: 42.5, east: 67.5, north: 47.5 },
-    { name: 'Костанайская', west: 60.0, south: 51.0, east: 67.5, north: 55.4 },
-    { name: 'Западно-Казахстанская', west: 49.5, south: 49.5, east: 55.5, north: 52.5 },
-    { name: 'Мангыстауская', west: 49.0, south: 41.5, east: 57.0, north: 46.5 },
-    { name: 'Атырауская', west: 49.5, south: 46.5, east: 57.0, north: 49.5 },
-    { name: 'Туркестанская', west: 57.0, south: 40.5, east: 75.5, north: 42.5 },
-    { name: 'Алматинская', west: 75.5, south: 42.5, east: 84.0, north: 46.5 },
-    { name: 'Акмолинская', west: 67.5, south: 50.5, east: 73.5, north: 53.5 },
-    { name: 'Павлодарская', west: 73.5, south: 50.5, east: 79.5, north: 55.4 },
-    { name: 'Северо-Казахстанская', west: 67.5, south: 53.5, east: 73.5, north: 55.4 },
-    { name: 'Восточно-Казахстанская', west: 79.5, south: 46.5, east: 87.5, north: 51.5 },
-    // Эти перекрываются с соседями — добавляются позже, чтобы перехватывать клики:
-    { name: 'Актюбинская', west: 55.5, south: 47.5, east: 67.5, north: 51.0 },
-    { name: 'Карагандинская', west: 71.5, south: 44.5, east: 79.5, north: 50.5 },
-    { name: 'Улытауская', west: 61.0, south: 46.5, east: 71.5, north: 50.5 },
-    // Города — последними (наивысший приоритет кликов):
-    { name: 'г. Алматы', west: 76.6, south: 43.0, east: 77.3, north: 43.5 },
-    { name: 'г. Астана', west: 71.2, south: 50.9, east: 71.8, north: 51.3 },
+// ── Central Asia data ─────────────────────────────────────────────────────────
+const COUNTRIES = [
+    { name: 'Казахстан',    flag: '🇰🇿', west: 49.5, south: 40.5, east: 87.5, north: 55.4 },
+    { name: 'Узбекистан',   flag: '🇺🇿', west: 55.9, south: 37.1, east: 73.2, north: 45.6 },
+    { name: 'Туркменистан', flag: '🇹🇲', west: 52.4, south: 35.1, east: 66.6, north: 42.8 },
+    { name: 'Кыргызстан',   flag: '🇰🇬', west: 69.2, south: 39.2, east: 80.3, north: 43.3 },
+    { name: 'Таджикистан',  flag: '🇹🇯', west: 67.3, south: 36.7, east: 75.2, north: 41.1 },
 ]
+
+const REGIONS = {
+    'Казахстан': [
+        { name: 'Жамбылская',            west: 67.5, south: 42.5, east: 75.5, north: 46.5 },
+        { name: 'Кызылординская',        west: 57.0, south: 42.5, east: 67.5, north: 47.5 },
+        { name: 'Костанайская',          west: 60.0, south: 51.0, east: 67.5, north: 55.4 },
+        { name: 'Западно-Казахстанская', west: 49.5, south: 49.5, east: 55.5, north: 52.5 },
+        { name: 'Мангыстауская',         west: 49.0, south: 41.5, east: 57.0, north: 46.5 },
+        { name: 'Атырауская',            west: 49.5, south: 46.5, east: 57.0, north: 49.5 },
+        { name: 'Туркестанская',         west: 57.0, south: 40.5, east: 75.5, north: 42.5 },
+        { name: 'Алматинская',           west: 75.5, south: 42.5, east: 84.0, north: 46.5 },
+        { name: 'Акмолинская',           west: 67.5, south: 50.5, east: 73.5, north: 53.5 },
+        { name: 'Павлодарская',          west: 73.5, south: 50.5, east: 79.5, north: 55.4 },
+        { name: 'Северо-Казахстанская',  west: 67.5, south: 53.5, east: 73.5, north: 55.4 },
+        { name: 'Восточно-Казахстанская',west: 79.5, south: 46.5, east: 87.5, north: 51.5 },
+        { name: 'Актюбинская',           west: 55.5, south: 47.5, east: 67.5, north: 51.0 },
+        { name: 'Карагандинская',        west: 71.5, south: 44.5, east: 79.5, north: 50.5 },
+        { name: 'Улытауская',            west: 61.0, south: 46.5, east: 71.5, north: 50.5 },
+        { name: 'г. Алматы',             west: 76.6, south: 43.0, east: 77.3, north: 43.5 },
+        { name: 'г. Астана',             west: 71.2, south: 50.9, east: 71.8, north: 51.3 },
+    ],
+    'Кыргызстан': [
+        { name: 'Чуйская',          west: 72.0, south: 42.2, east: 77.2, north: 43.3 },
+        { name: 'Таласская',        west: 70.5, south: 42.0, east: 73.3, north: 42.8 },
+        { name: 'Иссык-Кульская',   west: 75.5, south: 41.6, east: 80.3, north: 43.2 },
+        { name: 'Нарынская',        west: 73.3, south: 40.7, east: 77.5, north: 42.2 },
+        { name: 'Джалал-Абадская',  west: 71.5, south: 40.3, east: 74.5, north: 41.9 },
+        { name: 'Ошская',           west: 71.7, south: 39.5, east: 74.2, north: 40.7 },
+        { name: 'Баткенская',       west: 69.2, south: 39.3, east: 72.0, north: 40.5 },
+    ],
+    'Узбекистан': [
+        { name: 'Каракалпакстан',    west: 55.9, south: 41.0, east: 61.5, north: 45.6 },
+        { name: 'Хорезмская',        west: 59.5, south: 40.7, east: 62.0, north: 42.0 },
+        { name: 'Навоийская',        west: 61.5, south: 39.7, east: 66.5, north: 43.5 },
+        { name: 'Бухарская',         west: 61.8, south: 37.8, east: 65.5, north: 41.0 },
+        { name: 'Сырдарьинская',     west: 67.7, south: 40.3, east: 69.3, north: 41.2 },
+        { name: 'Джизакская',        west: 65.4, south: 39.8, east: 68.5, north: 41.1 },
+        { name: 'Самаркандская',     west: 65.4, south: 39.0, east: 68.5, north: 40.5 },
+        { name: 'Кашкадарьинская',   west: 64.8, south: 37.9, east: 68.0, north: 39.5 },
+        { name: 'Сурхандарьинская',  west: 66.4, south: 37.0, east: 68.8, north: 38.5 },
+        { name: 'Ташкентская',       west: 68.4, south: 40.2, east: 71.0, north: 41.7 },
+        { name: 'Ферганская',        west: 70.5, south: 39.9, east: 72.0, north: 40.9 },
+        { name: 'Андижанская',       west: 71.8, south: 40.3, east: 73.0, north: 41.1 },
+        { name: 'Наманганская',      west: 70.3, south: 40.7, east: 72.3, north: 41.5 },
+    ],
+    'Туркменистан': [
+        { name: 'Балканский',  west: 52.4, south: 37.0, east: 57.5, north: 42.8 },
+        { name: 'Дашогузский', west: 57.0, south: 40.4, east: 63.5, north: 42.8 },
+        { name: 'Ахальский',   west: 55.5, south: 37.0, east: 63.0, north: 40.5 },
+        { name: 'Марыйский',   west: 59.8, south: 35.1, east: 64.8, north: 39.5 },
+        { name: 'Лебапский',   west: 62.0, south: 37.5, east: 66.6, north: 41.0 },
+    ],
+    'Таджикистан': [
+        { name: 'Согдийская',  west: 67.7, south: 39.5, east: 71.0, north: 41.1 },
+        { name: 'РРП',         west: 68.0, south: 38.0, east: 70.5, north: 39.6 },
+        { name: 'г. Душанбе',  west: 68.55, south: 38.43, east: 69.00, north: 38.75 },
+        { name: 'Хатлонская',  west: 68.5, south: 36.7, east: 71.5, north: 38.5 },
+        { name: 'ГБАО',        west: 71.0, south: 36.7, east: 75.2, north: 39.5 },
+    ],
+}
 
 // ── Reactive state ────────────────────────────────────────────────────────────
 const mapEl = ref(null)
@@ -245,8 +289,9 @@ function capturePhoto() {
     closeCamera()
 }
 
-// ── Detail-level state ────────────────────────────────────────────────────────
-const selectionLevel = ref('oblast') // 'oblast' | 'detail'
+// ── Selection state ───────────────────────────────────────────────────────────
+const selectionLevel = ref('country') // 'country' | 'oblast' | 'detail'
+const selectedCountry = ref(null)
 const selectedCity = ref(null)
 
 // ── Kazakhstan cities per oblast ──────────────────────────────────────────────
@@ -268,27 +313,63 @@ const CITIES = {
     'Улытауская': [{ name: 'Жезқазған', lat: 47.803, lon: 67.707 }, { name: 'Сатпаев', lat: 47.903, lon: 67.524 }, { name: 'Ұлытау', lat: 48.619, lon: 67.006 }, { name: 'Жайрем', lat: 48.021, lon: 70.785 }],
     'г. Алматы': [{ name: 'Алмалинский р-н', lat: 43.262, lon: 76.946 }, { name: 'Бостандық р-н', lat: 43.249, lon: 76.858 }, { name: 'Медеу р-н', lat: 43.268, lon: 77.014 }, { name: 'Алатау р-н', lat: 43.217, lon: 76.999 }, { name: 'Жетісу р-н', lat: 43.292, lon: 77.050 }, { name: 'Наурызбай р-н', lat: 43.206, lon: 76.791 }, { name: 'Түрксіб р-н', lat: 43.311, lon: 77.046 }, { name: 'Әуезов р-н', lat: 43.224, lon: 76.875 }],
     'г. Астана': [{ name: 'Есіл р-н', lat: 51.134, lon: 71.502 }, { name: 'Алматы р-н', lat: 51.159, lon: 71.413 }, { name: 'Байқоңыр р-н', lat: 51.203, lon: 71.381 }, { name: 'Нұра р-н', lat: 51.221, lon: 71.509 }, { name: 'Сарыарқа р-н', lat: 51.186, lon: 71.500 }],
+    // Kyrgyzstan
+    'Чуйская':         [{ name: 'Бишкек', lat: 42.87, lon: 74.59 }, { name: 'Токмок', lat: 42.84, lon: 75.30 }, { name: 'Кара-Балта', lat: 42.83, lon: 73.86 }, { name: 'Кант', lat: 42.89, lon: 74.85 }, { name: 'Сокулук', lat: 42.86, lon: 74.30 }],
+    'Таласская':       [{ name: 'Талас', lat: 42.52, lon: 72.24 }, { name: 'Кара-Буура', lat: 42.54, lon: 71.80 }],
+    'Иссык-Кульская':  [{ name: 'Каракол', lat: 42.49, lon: 78.40 }, { name: 'Балыкчы', lat: 42.46, lon: 76.19 }, { name: 'Чолпон-Ата', lat: 42.65, lon: 77.08 }, { name: 'Бостери', lat: 42.67, lon: 76.80 }],
+    'Нарынская':       [{ name: 'Нарын', lat: 41.43, lon: 76.00 }, { name: 'Ат-Баши', lat: 41.17, lon: 75.81 }, { name: 'Кочкор', lat: 42.21, lon: 75.76 }],
+    'Джалал-Абадская': [{ name: 'Жалал-Абад', lat: 40.93, lon: 73.00 }, { name: 'Кара-Куль', lat: 41.62, lon: 72.72 }, { name: 'Таш-Кёмюр', lat: 41.35, lon: 72.22 }, { name: 'Майлуу-Суу', lat: 41.27, lon: 72.46 }],
+    'Ошская':          [{ name: 'Ош', lat: 40.52, lon: 72.80 }, { name: 'Узген', lat: 40.77, lon: 73.29 }, { name: 'Кара-Суу', lat: 40.69, lon: 72.86 }],
+    'Баткенская':      [{ name: 'Баткен', lat: 40.06, lon: 70.82 }, { name: 'Кадамжай', lat: 40.12, lon: 71.27 }, { name: 'Исфана', lat: 39.83, lon: 69.52 }, { name: 'Сулюкта', lat: 39.94, lon: 69.57 }],
+    // Uzbekistan
+    'Каракалпакстан':  [{ name: 'Нукус', lat: 42.46, lon: 59.62 }, { name: 'Тахиаташ', lat: 42.30, lon: 59.93 }, { name: 'Муйнак', lat: 43.77, lon: 59.02 }, { name: 'Чимбай', lat: 42.94, lon: 59.78 }],
+    'Хорезмская':      [{ name: 'Ургенч', lat: 41.55, lon: 60.63 }, { name: 'Хива', lat: 41.38, lon: 60.36 }, { name: 'Хонка', lat: 41.53, lon: 60.82 }],
+    'Навоийская':      [{ name: 'Навои', lat: 40.08, lon: 65.38 }, { name: 'Зарафшан', lat: 41.56, lon: 64.19 }, { name: 'Учкудук', lat: 41.56, lon: 63.56 }, { name: 'Газли', lat: 40.13, lon: 63.87 }],
+    'Бухарская':       [{ name: 'Бухара', lat: 39.77, lon: 64.42 }, { name: 'Каган', lat: 39.71, lon: 64.55 }, { name: 'Коровулбозор', lat: 39.47, lon: 63.77 }],
+    'Сырдарьинская':   [{ name: 'Гулистан', lat: 40.49, lon: 68.78 }, { name: 'Янгиер', lat: 40.39, lon: 68.83 }, { name: 'Ширин', lat: 40.50, lon: 69.04 }],
+    'Джизакская':      [{ name: 'Джизак', lat: 40.12, lon: 67.84 }, { name: 'Зафаробод', lat: 40.17, lon: 68.05 }, { name: 'Дустлик', lat: 40.53, lon: 67.94 }],
+    'Самаркандская':   [{ name: 'Самарканд', lat: 39.65, lon: 66.98 }, { name: 'Катта-Курган', lat: 39.90, lon: 66.26 }, { name: 'Ургут', lat: 39.40, lon: 67.25 }],
+    'Кашкадарьинская': [{ name: 'Карши', lat: 38.86, lon: 65.79 }, { name: 'Шахрисабз', lat: 39.06, lon: 66.84 }, { name: 'Китаб', lat: 39.14, lon: 66.88 }],
+    'Сурхандарьинская':[{ name: 'Термез', lat: 37.22, lon: 67.28 }, { name: 'Денов', lat: 38.27, lon: 67.89 }, { name: 'Байсун', lat: 38.21, lon: 67.19 }],
+    'Ташкентская':     [{ name: 'Ташкент', lat: 41.30, lon: 69.24 }, { name: 'Алмалык', lat: 40.85, lon: 69.60 }, { name: 'Ангрен', lat: 41.02, lon: 69.98 }, { name: 'Чирчик', lat: 41.47, lon: 69.58 }],
+    'Ферганская':      [{ name: 'Фергана', lat: 40.38, lon: 71.78 }, { name: 'Маргилан', lat: 40.47, lon: 71.72 }, { name: 'Коканд', lat: 40.53, lon: 70.94 }],
+    'Андижанская':     [{ name: 'Андижан', lat: 40.78, lon: 72.35 }, { name: 'Асака', lat: 40.64, lon: 72.24 }],
+    'Наманганская':    [{ name: 'Наманган', lat: 41.00, lon: 71.67 }, { name: 'Чуст', lat: 41.13, lon: 71.22 }],
+    // Turkmenistan
+    'Балканский':  [{ name: 'Балканабад', lat: 39.51, lon: 54.37 }, { name: 'Туркменбашы', lat: 40.02, lon: 52.97 }, { name: 'Сердар', lat: 38.97, lon: 56.27 }],
+    'Дашогузский': [{ name: 'Дашогуз', lat: 41.84, lon: 59.97 }, { name: 'Гёнеургенч', lat: 42.32, lon: 59.15 }, { name: 'Болдумсаз', lat: 41.75, lon: 59.70 }],
+    'Ахальский':   [{ name: 'Ашхабад', lat: 37.96, lon: 58.33 }, { name: 'Аркадаг', lat: 37.93, lon: 58.32 }, { name: 'Анау', lat: 37.90, lon: 58.52 }, { name: 'Теджен', lat: 37.39, lon: 60.51 }],
+    'Марыйский':   [{ name: 'Мары', lat: 37.60, lon: 61.83 }, { name: 'Байрамали', lat: 37.62, lon: 62.18 }, { name: 'Ёлётен', lat: 37.28, lon: 62.37 }],
+    'Лебапский':   [{ name: 'Туркменабат', lat: 39.09, lon: 63.57 }, { name: 'Сейди', lat: 39.44, lon: 62.89 }, { name: 'Атамырат', lat: 37.84, lon: 65.21 }],
+    // Tajikistan
+    'Согдийская':  [{ name: 'Худжанд', lat: 40.28, lon: 69.62 }, { name: 'Бустон', lat: 40.52, lon: 69.67 }, { name: 'Истаравшан', lat: 39.91, lon: 69.00 }, { name: 'Исфара', lat: 40.12, lon: 70.62 }],
+    'РРП':         [{ name: 'Турсунзода', lat: 38.51, lon: 68.22 }, { name: 'Вахдат', lat: 38.56, lon: 69.01 }, { name: 'Файзобод', lat: 38.55, lon: 69.30 }, { name: 'Рогун', lat: 38.56, lon: 69.76 }],
+    'г. Душанбе':  [{ name: 'Сино р-н', lat: 38.56, lon: 68.73 }, { name: 'Фирдавси р-н', lat: 38.57, lon: 68.74 }, { name: 'Шохмансур р-н', lat: 38.54, lon: 68.74 }, { name: 'Исмоили Сомони р-н', lat: 38.58, lon: 68.77 }],
+    'Хатлонская':  [{ name: 'Бохтар', lat: 37.84, lon: 68.78 }, { name: 'Куляб', lat: 37.91, lon: 69.78 }, { name: 'Вахш', lat: 37.69, lon: 68.83 }, { name: 'Нурек', lat: 38.38, lon: 69.32 }],
+    'ГБАО':        [{ name: 'Хорог', lat: 37.49, lon: 71.55 }, { name: 'Мургаб', lat: 38.17, lon: 73.97 }, { name: 'Ишкашим', lat: 36.72, lon: 71.61 }],
 }
 
 // ── Leaflet internals (non-reactive) ─────────────────────────────────────────
 let map = null
+let countryLayers = {}
 let rectLayers = {}
 let hotspotLayer = null
 let cityMarkerLayer = null
 
 // ── Styles ───────────────────────────────────────────────────────────────────
-const normalStyle = () => ({ color: '#00e676', weight: 1.5, fillColor: '#00e676', fillOpacity: 0.07 })
-const activeStyle = () => ({ color: '#00e676', weight: 2.5, fillColor: '#00e676', fillOpacity: 0.20 })
-// ДОБАВИТЬ:
-const fireStyle = () => ({ color: '#cc0000', weight: 2, fillColor: '#ff2200', fillOpacity: 0.35 })
-const fireActiveStyle = () => ({ color: '#cc0000', weight: 3, fillColor: '#ff2200', fillOpacity: 0.50 })
+const countryStyle      = () => ({ color: '#00bcd4', weight: 1.5, fillColor: '#00bcd4', fillOpacity: 0.08 })
+const countryActiveStyle= () => ({ color: '#00bcd4', weight: 2.5, fillColor: '#00bcd4', fillOpacity: 0.20 })
+const normalStyle       = () => ({ color: '#00e676', weight: 1.5, fillColor: '#00e676', fillOpacity: 0.07 })
+const activeStyle       = () => ({ color: '#00e676', weight: 2.5, fillColor: '#00e676', fillOpacity: 0.20 })
+const fireStyle         = () => ({ color: '#cc0000', weight: 2,   fillColor: '#ff2200', fillOpacity: 0.35 })
+const fireActiveStyle   = () => ({ color: '#cc0000', weight: 3,   fillColor: '#ff2200', fillOpacity: 0.50 })
 function oblastBounds(o) {
     return [[o.south, o.west], [o.north, o.east]]
 }
 
 // ── Map init ──────────────────────────────────────────────────────────────────
 function initMap() {
-    map = L.map(mapEl.value, { center: [48.0, 67.0], zoom: 5 })
+    map = L.map(mapEl.value, { center: [41.0, 62.0], zoom: 4 })
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
@@ -298,18 +379,22 @@ function initMap() {
     hotspotLayer = L.layerGroup().addTo(map)
     cityMarkerLayer = L.layerGroup().addTo(map)
 
-    OBLASTS.forEach(oblast => {
-        const rect = L.rectangle(oblastBounds(oblast), normalStyle())
+    COUNTRIES.forEach(country => {
+        const rect = L.rectangle(oblastBounds(country), countryStyle())
             .addTo(map)
-            .bindTooltip(oblast.name, { sticky: true })
-
-        rect.on('click', () => selectOblast(oblast))
-        rectLayers[oblast.name] = rect
+            .bindTooltip(country.flag + ' ' + country.name, { sticky: true })
+        rect.on('click', () => selectCountry(country))
+        countryLayers[country.name] = rect
     })
 
     if (props.currentZone) {
-        const saved = OBLASTS.find(o => o.name === props.currentZone.oblast_name)
-        if (saved) restoreSelection(saved)
+        for (const [countryName, regions] of Object.entries(REGIONS)) {
+            const found = regions.find(o => o.name === props.currentZone.oblast_name)
+            if (found) {
+                const country = COUNTRIES.find(c => c.name === countryName)
+                if (country) { selectCountry(country); break }
+            }
+        }
     }
 }
 
@@ -342,6 +427,24 @@ async function selectGridCell(cell) {
     await saveAndFetch({ name: `Блок ${cell.label}`, ...cell })
 }
 
+function backToCountries() {
+    selectionLevel.value = 'country'
+    selectedCountry.value = null
+    selectedOblast.value = null
+    selectedCity.value = null
+    oblastFireCounts.value = {}
+    clearDetail()
+    hotspots.value = []
+    hotspotLayer.clearLayers()
+    Object.values(rectLayers).forEach(l => map.removeLayer(l))
+    rectLayers = {}
+    Object.values(countryLayers).forEach(l => {
+        l.setStyle(countryStyle())
+        if (!map.hasLayer(l)) l.addTo(map)
+    })
+    map.flyTo([41.0, 62.0], 4, { duration: 0.8 })
+}
+
 function backToOblasts() {
     selectionLevel.value = 'oblast'
     selectedCity.value = null
@@ -354,9 +457,42 @@ function backToOblasts() {
     }
     hotspots.value = []
     hotspotLayer.clearLayers()
-    map.flyTo([48.0, 67.0], 5, { duration: 0.8 })
+    if (selectedCountry.value) {
+        map.fitBounds(oblastBounds(selectedCountry.value), { padding: [20, 20] })
+    }
 }
+
 // ── Selection ─────────────────────────────────────────────────────────────────
+function selectCountry(country) {
+    Object.entries(countryLayers).forEach(([name, l]) => {
+        if (name !== country.name) map.removeLayer(l)
+        else l.setStyle(countryActiveStyle())
+    })
+    selectedCountry.value = country
+    selectedOblast.value = null
+    selectedCity.value = null
+    selectionLevel.value = 'oblast'
+    oblastFireCounts.value = {}
+    hotspots.value = []
+    hotspotLayer.clearLayers()
+    clearDetail()
+
+    Object.values(rectLayers).forEach(l => map.removeLayer(l))
+    rectLayers = {}
+
+    const regions = REGIONS[country.name] ?? []
+    regions.forEach(oblast => {
+        const rect = L.rectangle(oblastBounds(oblast), normalStyle())
+            .addTo(map)
+            .bindTooltip(oblast.name, { sticky: true })
+        rect.on('click', () => selectOblast(oblast))
+        rectLayers[oblast.name] = rect
+    })
+
+    map.fitBounds(oblastBounds(country), { padding: [30, 30] })
+    setTimeout(checkAllOblastsFires, 500)
+}
+
 function selectOblast(oblast) {
     clearDetail()
     if (selectedOblast.value) {
@@ -371,10 +507,11 @@ function selectOblast(oblast) {
     saveAndFetch(oblast)
 }
 
-// Фоновая проверка пожаров по всем регионам при загрузке
+// Фоновая проверка пожаров по регионам выбранной страны
 async function checkAllOblastsFires() {
-    for (const oblast of OBLASTS) {
-        // Пропускаем города — там маленький bbox, не интересно
+    if (!selectedCountry.value) return
+    const regions = REGIONS[selectedCountry.value.name] ?? []
+    for (const oblast of regions) {
         if (oblast.name.startsWith('г.')) continue
         try {
             const { data } = await axios.patch('/zone', {
@@ -386,20 +523,15 @@ async function checkAllOblastsFires() {
             })
             const count = data.hotspots?.length ?? 0
             oblastFireCounts.value[oblast.name] = count
-            if (count > 0) {
-                rectLayers[oblast.name]?.setStyle(fireStyle())
+            if (count > 0 && rectLayers[oblast.name]) {
+                rectLayers[oblast.name].setStyle(fireStyle())
             }
         } catch { /* тихо игнорируем */ }
-        // Небольшая пауза чтобы не DDoS-ить NASA API
         await new Promise(r => setTimeout(r, 300))
     }
 }
 
-onMounted(() => {
-    initMap()
-    // Запускаем фоновую проверку через 1 сек после инициализации карты
-    setTimeout(checkAllOblastsFires, 1000)
-})
+onMounted(() => { initMap() })
 
 async function saveAndFetch(oblast) {
     loading.value = true
@@ -426,6 +558,7 @@ async function saveAndFetch(oblast) {
 
 async function restoreSelection(oblast) {
     selectedOblast.value = oblast
+    selectionLevel.value = 'detail'
     rectLayers[oblast.name]?.setStyle(activeStyle())
     loading.value = true
     try {
@@ -558,10 +691,17 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
             <!-- Sidebar -->
             <aside class="afs-sidebar">
 
+                <!-- Country-level header -->
+                <div v-if="selectionLevel === 'country'" class="afs-sidebar__header">
+                    <span class="afs-sidebar__title">Центральная Азия</span>
+                </div>
+
                 <!-- Oblast-level header -->
-                <div v-if="selectionLevel === 'oblast'" class="afs-sidebar__header">
-                    <span class="afs-sidebar__title">Регионы Казахстана</span>
-                    <span v-if="hotspots.length" class="afs-fire-badge">🔥 {{ hotspots.length }}</span>
+                <div v-else-if="selectionLevel === 'oblast'" class="afs-sidebar__header afs-sidebar__header--detail">
+                    <button class="afs-back-btn" @click="backToCountries" title="Назад">←</button>
+                    <span class="afs-sidebar__title afs-sidebar__title--detail">
+                        {{ selectedCountry?.flag }} {{ selectedCountry?.name }}
+                    </span>
                 </div>
 
                 <!-- Detail-level header -->
@@ -571,12 +711,24 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                     <span v-if="hotspots.length" class="afs-fire-badge">🔥 {{ hotspots.length }}</span>
                 </div>
 
+                <!-- Country list -->
+                <ul v-if="selectionLevel === 'country'" class="afs-oblast-list">
+                    <li v-for="country in COUNTRIES" :key="country.name"
+                        class="afs-oblast-item afs-oblast-item--country"
+                        @click="selectCountry(country)">
+                        <span class="afs-oblast-item__name">{{ country.flag }} {{ country.name }}</span>
+                    </li>
+                </ul>
+
                 <!-- Oblast list -->
-                <ul v-if="selectionLevel === 'oblast'" class="afs-oblast-list">
-                    <li v-for="oblast in OBLASTS" :key="oblast.name" class="afs-oblast-item" :class="{
-                        'afs-oblast-item--active': selectedOblast?.name === oblast.name,
-                        'afs-oblast-item--fire': oblastFireCounts[oblast.name] > 0
-                    }" @click="selectOblast(oblast)">
+                <ul v-else-if="selectionLevel === 'oblast'" class="afs-oblast-list">
+                    <li v-for="oblast in (REGIONS[selectedCountry?.name] ?? [])" :key="oblast.name"
+                        class="afs-oblast-item"
+                        :class="{
+                            'afs-oblast-item--active': selectedOblast?.name === oblast.name,
+                            'afs-oblast-item--fire': oblastFireCounts[oblast.name] > 0
+                        }"
+                        @click="selectOblast(oblast)">
                         <span class="afs-oblast-item__name">
                             {{ oblast.name }}
                             <span v-if="oblastFireCounts[oblast.name] > 0" class="afs-fire-dot">🔥</span>
@@ -590,7 +742,8 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                 <!-- City list (detail level) -->
                 <ul v-else class="afs-oblast-list">
                     <li class="afs-detail-hint">Нас. пункты — или выберите блок на карте</li>
-                    <li v-for="city in (CITIES[selectedOblast?.name] ?? [])" :key="city.name" class="afs-oblast-item"
+                    <li v-for="city in (CITIES[selectedOblast?.name] ?? [])" :key="city.name"
+                        class="afs-oblast-item"
                         :class="{ 'afs-oblast-item--active': selectedCity?.name === city.name }"
                         @click="selectCity(city)">
                         <span class="afs-oblast-item__name">📍 {{ city.name }}</span>
@@ -613,6 +766,10 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 
                 <!-- Summary bar -->
                 <div v-if="selectedOblast && !loading" class="afs-summary-bar">
+                    <span v-if="selectedCountry" class="afs-summary-bar__country">
+                        {{ selectedCountry.flag }} {{ selectedCountry.name }}
+                    </span>
+                    <span v-if="selectedCountry" class="afs-summary-bar__arrow">›</span>
                     <span class="afs-summary-bar__oblast">{{ selectedOblast.name }}</span>
                     <span v-if="selectedCity" class="afs-summary-bar__arrow">›</span>
                     <span v-if="selectedCity" class="afs-summary-bar__city">{{ selectedCity.name }}</span>
@@ -819,6 +976,19 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 </template>
 
 <style scoped>
+/* ── Country item ────────────────────────────────────────────────────────── */
+.afs-oblast-item--country {
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+.afs-summary-bar__country {
+    color: #00bcd4;
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
 /* ── Fire semantic — keep red, these represent real data ─────────────────── */
 .afs-oblast-item--fire {
     background: rgba(220, 38, 38, 0.06);
@@ -1881,4 +2051,102 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 }
 .afs-rp__ai-btn:hover { background: #22c55e; }
 
+</style>
+
+<!-- ── Light theme overrides (non-scoped, wins over scoped via html[] specificity) ── -->
+<style>
+html[data-theme="light"] .afs-error-banner         { background: #fff0f0; border-bottom-color: #fca5a5; color: #991b1b; }
+
+html[data-theme="light"] .afs-tabs                 { background: #ffffff; border-bottom-color: #c4ddc8; }
+html[data-theme="light"] .afs-tab                  { color: #6b8570; }
+html[data-theme="light"] .afs-tab:hover            { background: #e6f4ea; color: #1a2e1d; border-color: #c4ddc8; }
+html[data-theme="light"] .afs-tab--active          { background: #e6f4ea; color: #007a3a; border-color: #00a550; }
+
+html[data-theme="light"] .afs-sidebar              { background: #f8faf8; border-right-color: #c4ddc8; }
+html[data-theme="light"] .afs-sidebar__header      { background: #ffffff; border-bottom-color: #c4ddc8; }
+html[data-theme="light"] .afs-sidebar__title       { color: #3d5c42; }
+html[data-theme="light"] .afs-back-btn             { background: rgba(0,165,80,0.08); border-color: rgba(0,165,80,0.3); color: #007a3a; }
+html[data-theme="light"] .afs-back-btn:hover       { background: rgba(0,165,80,0.16); }
+html[data-theme="light"] .afs-detail-hint          { color: #9ab0a0; }
+
+html[data-theme="light"] .afs-oblast-list          { background: #f8faf8; }
+html[data-theme="light"] .afs-oblast-list::-webkit-scrollbar-track { background: #f8faf8; }
+html[data-theme="light"] .afs-oblast-list::-webkit-scrollbar-thumb { background: #c4ddc8; }
+html[data-theme="light"] .afs-oblast-item:hover    { background: #e6f4ea; border-left-color: #00a550; }
+html[data-theme="light"] .afs-oblast-item--active  { background: #d4edda; border-left-color: #007a3a; }
+html[data-theme="light"] .afs-oblast-item__name    { color: #1a2e1d; }
+html[data-theme="light"] .afs-oblast-item--active .afs-oblast-item__name { color: #007a3a; }
+
+html[data-theme="light"] .afs-summary-bar          { background: #ffffff; border-top-color: #00a550; }
+html[data-theme="light"] .afs-summary-bar__oblast  { color: #007a3a; }
+html[data-theme="light"] .afs-summary-bar__arrow   { color: #9ab0a0; }
+html[data-theme="light"] .afs-summary-bar__city    { color: #2563eb; }
+html[data-theme="light"] .afs-summary-bar__count   { color: #3d5c42; }
+html[data-theme="light"] .afs-summary-bar__none    { color: #9ab0a0; }
+
+html[data-theme="light"] .afs-map-hint             { background: rgba(255,255,255,0.94); color: #3d5c42; border-color: #c4ddc8; }
+html[data-theme="light"] .afs-map-loading          { background: rgba(255,255,255,0.75); color: #1a2e1d; }
+
+html[data-theme="light"] .afs-region-panel         { background: #ffffff; border-color: #c4ddc8; border-top-color: #00a550; box-shadow: 0 4px 24px rgba(0,0,0,0.12); }
+html[data-theme="light"] .afs-region-panel::-webkit-scrollbar-track { background: #fff; }
+html[data-theme="light"] .afs-region-panel::-webkit-scrollbar-thumb { background: #c4ddc8; }
+html[data-theme="light"] .afs-rp__header           { border-bottom-color: #c4ddc8; }
+html[data-theme="light"] .afs-rp__title            { color: #007a3a; }
+html[data-theme="light"] .afs-rp__close            { color: #9ab0a0; }
+html[data-theme="light"] .afs-rp__close:hover      { color: #1a2e1d; }
+html[data-theme="light"] .afs-rp__section          { border-bottom-color: #eaf3eb; }
+html[data-theme="light"] .afs-rp__section-title    { color: #9ab0a0; }
+html[data-theme="light"] .afs-rp__update-text      { color: #9ab0a0; }
+html[data-theme="light"] .afs-rp__eco-card         { background: #f4f7f4; border-color: #c4ddc8; }
+html[data-theme="light"] .afs-rp__eco-label        { color: #9ab0a0; }
+html[data-theme="light"] .afs-rp__eco-value        { color: #1a2e1d; }
+html[data-theme="light"] .afs-rp__table thead tr   { background: #e6f4ea; }
+html[data-theme="light"] .afs-rp__table th         { color: #007a3a; border-color: #c4ddc8; }
+html[data-theme="light"] .afs-rp__table td         { color: #3d5c42; border-color: #eaf3eb; }
+html[data-theme="light"] .afs-rp__table tr:nth-child(even) { background: #f4f7f4; }
+
+html[data-theme="light"] .afs-crop-panel           { background: #f2f6f2; }
+html[data-theme="light"] .afs-sessions-sidebar     { background: #ffffff; border-right-color: #c4ddc8; }
+html[data-theme="light"] .afs-sessions-header      { background: #ffffff; border-bottom-color: #c4ddc8; }
+html[data-theme="light"] .afs-sessions-title       { color: #9ab0a0; }
+html[data-theme="light"] .afs-sessions-empty       { color: #9ab0a0; }
+html[data-theme="light"] .afs-session-item         { border-bottom-color: #eaf3eb; }
+html[data-theme="light"] .afs-session-item:hover   { background: #e6f4ea; }
+html[data-theme="light"] .afs-session-item--active { background: #d4edda; }
+html[data-theme="light"] .afs-session-item__title  { color: #1a2e1d; }
+html[data-theme="light"] .afs-session-item__date   { color: #9ab0a0; }
+html[data-theme="light"] .afs-session-item__del    { color: #9ab0a0; }
+html[data-theme="light"] .afs-session-item__del:hover { color: #dc2626; }
+
+html[data-theme="light"] .afs-crop-main            { background: #f8faf8; }
+html[data-theme="light"] .afs-crop-messages        { background: #f8faf8; }
+html[data-theme="light"] .afs-crop-empty__title    { color: #1a2e1d; }
+html[data-theme="light"] .afs-crop-empty__hint     { color: #6b8570; }
+
+html[data-theme="light"] .afs-msg--user .afs-msg__bubble { background: #d4edda; color: #1a2e1d; border-color: #c4ddc8; }
+html[data-theme="light"] .afs-msg--ai  .afs-msg__bubble  { background: #ffffff; color: #1a2e1d; border-color: #c4ddc8; }
+
+html[data-theme="light"] .afs-crop-input-row       { background: #ffffff; border-top-color: #c4ddc8; }
+html[data-theme="light"] .afs-crop-textarea        { background: #f8faf8; color: #1a2e1d; border-color: #c4ddc8; }
+html[data-theme="light"] .afs-crop-textarea::placeholder { color: #9ab0a0; }
+html[data-theme="light"] .afs-crop-attach-btn      { background: #e6f4ea; color: #007a3a; border-color: #c4ddc8; }
+html[data-theme="light"] .afs-crop-attach-btn:hover { background: #c8e6c9; }
+
+html[data-theme="light"] .afs-crop-preview-bar     { background: #ffffff; border-top-color: #c4ddc8; }
+
+html[data-theme="light"] .afs-camera-modal         { background: #ffffff; }
+html[data-theme="light"] .afs-camera-header        { background: #f8faf8; border-bottom-color: #c4ddc8; }
+html[data-theme="light"] .afs-camera-title         { color: #1a2e1d; }
+html[data-theme="light"] .afs-camera-close         { color: #6b8570; }
+html[data-theme="light"] .afs-camera-footer        { background: #f2f6f2; }
+
+html[data-theme="light"] .ai-message-content :deep(h1),
+html[data-theme="light"] .ai-message-content :deep(h2),
+html[data-theme="light"] .ai-message-content :deep(h3) { color: #007a3a; }
+html[data-theme="light"] .ai-message-content :deep(td),
+html[data-theme="light"] .ai-message-content :deep(th) { border-color: #c4ddc8; }
+html[data-theme="light"] .ai-message-content :deep(th) { background: #e6f4ea; color: #007a3a; }
+html[data-theme="light"] .ai-message-content :deep(tr:nth-child(even)) { background: #f4f7f4; }
+html[data-theme="light"] .ai-message-content :deep(strong) { color: #007a3a; }
+html[data-theme="light"] .ai-message-content :deep(hr)     { border-color: #c4ddc8; }
 </style>

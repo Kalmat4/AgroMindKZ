@@ -354,3 +354,29 @@ import { Head, Link } from '@inertiajs/vue3'
     letter-spacing: 0.3px;
 }
 </style>
+
+<style>
+html[data-theme="light"] .about-root            { background: var(--afs-bg) !important; color: var(--afs-text); }
+html[data-theme="light"] .about-hero            { background: linear-gradient(160deg, #e8f5e9 0%, #f4f7f4 100%); }
+html[data-theme="light"] .about-hero__title     { color: var(--afs-text); }
+html[data-theme="light"] .about-hero__subtitle  { color: var(--afs-text2); }
+html[data-theme="light"] .about-hero__cta       { background: var(--afs-accent2); color: #ffffff; }
+html[data-theme="light"] .about-hero__cta:hover { background: var(--afs-accent); }
+html[data-theme="light"] .about-stats           { background: #ffffff; border-top-color: var(--afs-border); border-bottom-color: var(--afs-border); }
+html[data-theme="light"] .about-stat            { border-right-color: var(--afs-border); }
+html[data-theme="light"] .about-stat__value     { color: var(--afs-accent2); }
+html[data-theme="light"] .about-stat__label     { color: var(--afs-muted); }
+html[data-theme="light"] .about-section         { background: var(--afs-bg); }
+html[data-theme="light"] .about-section--alt    { background: #ffffff; }
+html[data-theme="light"] .about-section__title  { color: var(--afs-text); }
+html[data-theme="light"] .about-feature-card    { background: #ffffff; border-color: var(--afs-border); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+html[data-theme="light"] .about-feature-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.1); border-color: var(--afs-accent2); }
+html[data-theme="light"] .about-feature-card__title { color: var(--afs-text); }
+html[data-theme="light"] .about-feature-card__text  { color: var(--afs-text2); }
+html[data-theme="light"] .about-tech-tag        { background: var(--afs-bg5); border-color: var(--afs-border); color: var(--afs-text2); }
+html[data-theme="light"] .about-tech-tag:hover  { border-color: var(--afs-accent2); color: var(--afs-accent2); }
+html[data-theme="light"] .about-nasa-card       { background: #ffffff; border-color: var(--afs-border); }
+html[data-theme="light"] .about-nasa-card__header { border-bottom-color: var(--afs-border); }
+html[data-theme="light"] .about-nasa-card__text { color: var(--afs-text2); }
+html[data-theme="light"] .about-footer          { background: var(--afs-bg3) !important; border-top-color: var(--afs-border); color: var(--afs-muted); }
+</style>

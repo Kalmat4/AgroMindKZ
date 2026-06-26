@@ -400,3 +400,27 @@ onBeforeUnmount(() => {
     height: 100% !important;
 }
 </style>
+
+<style>
+html[data-theme="light"] .yld-bg           { background: var(--afs-bg) !important; }
+html[data-theme="light"] .yld-page-title   { color: var(--afs-text); }
+html[data-theme="light"] .yld-card         { background: #ffffff; border-color: var(--afs-border); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+html[data-theme="light"] .yld-card--green  { background: #f0faf4 !important; border-color: rgba(34,197,94,0.3) !important; }
+html[data-theme="light"] .yld-card--orange { background: #fff8f4 !important; border-color: rgba(234,88,12,0.3) !important; }
+html[data-theme="light"] .yld-card__label  { color: var(--afs-muted); }
+html[data-theme="light"] .yld-card__value  { color: var(--afs-text); }
+html[data-theme="light"] .yld-section__title   { color: var(--afs-text); border-bottom-color: var(--afs-border); }
+html[data-theme="light"] .yld-table-wrap       { border-color: var(--afs-border); }
+html[data-theme="light"] .yld-table            { background: #ffffff; }
+html[data-theme="light"] .yld-table thead tr   { background: var(--afs-bg5); }
+html[data-theme="light"] .yld-table th         { color: var(--afs-text2); border-bottom-color: var(--afs-border); }
+html[data-theme="light"] .yld-table tbody tr   { background: #ffffff; border-bottom-color: #eaf3eb; }
+html[data-theme="light"] .yld-table tbody tr:hover { background: var(--afs-bg5); }
+html[data-theme="light"] .yld-table td         { color: var(--afs-text2); }
+html[data-theme="light"] .yld-table__empty     { color: var(--afs-muted); }
+html[data-theme="light"] .yld-crop-name        { color: var(--afs-text); }
+html[data-theme="light"] .yld-none             { color: var(--afs-muted2) !important; }
+html[data-theme="light"] .yld-notes            { background: var(--afs-bg3); border-color: var(--afs-border); color: var(--afs-text2); }
+html[data-theme="light"] .yld-chart-wrap       { background: #ffffff; border-color: var(--afs-border); }
+html[data-theme="light"] .badge--gray          { background: rgba(100,100,100,0.08); color: #6b8570; border-color: var(--afs-border); }
+</style>
