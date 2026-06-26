@@ -433,7 +433,7 @@ function backToCountries() {
     selectedCountry.value = null
     selectedOblast.value = null
     selectedCity.value = null
-    oblastFireCounts.value = {}
+    oblastFireHotspots.value = {}
     clearDetail()
     hotspots.value = []
     hotspotLayer.clearLayers()
@@ -473,7 +473,7 @@ function selectCountry(country) {
     selectedOblast.value = null
     selectedCity.value = null
     selectionLevel.value = 'oblast'
-    oblastFireCounts.value = {}
+    oblastFireHotspots.value = {}
     hotspots.value = []
     hotspotLayer.clearLayers()
     clearDetail()
@@ -522,11 +522,7 @@ async function checkAllOblastsFires() {
                 bbox_east: oblast.east,
                 bbox_north: oblast.north,
             })
-            const count = data.hotspots?.length ?? 0
-            oblastFireCounts.value[oblast.name] = count
-            if (count > 0 && rectLayers[oblast.name]) {
-                rectLayers[oblast.name].setStyle(fireStyle())
-            }
+            oblastFireHotspots.value[oblast.name] = data.hotspots ?? []
         } catch { /* тихо игнорируем */ }
         await new Promise(r => setTimeout(r, 300))
     }
@@ -570,7 +566,28 @@ async function restoreSelection(oblast) {
         loading.value = false
     }
 }
-const oblastFireCounts = ref({})
+const oblastFireHotspots = ref({})
+
+const oblastFireCounts = computed(() => {
+    const cutoff = Date.now() - fireHoursFilter.value * 3600 * 1000
+    const result = {}
+    for (const [name, spots] of Object.entries(oblastFireHotspots.value)) {
+        result[name] = spots.filter(spot => {
+            const d = spotToDate(spot)
+            return !d || d.getTime() >= cutoff
+        }).length
+    }
+    return result
+})
+
+watch(oblastFireCounts, (newCounts) => {
+    for (const [name, count] of Object.entries(newCounts)) {
+        if (!rectLayers[name]) continue
+        if (selectedOblast.value?.name === name) continue
+        rectLayers[name].setStyle(count > 0 ? fireStyle() : normalStyle())
+    }
+}, { deep: true })
+
 // ── Hotspot markers ───────────────────────────────────────────────────────────
 function renderHotspots(spots) {
     hotspotLayer.clearLayers()
