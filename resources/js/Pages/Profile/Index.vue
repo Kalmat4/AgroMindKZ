@@ -52,6 +52,23 @@ const logout = () => {
                 ✓ {{ page.props.flash.success }}
             </div>
 
+            <!-- Region subscription card -->
+            <section class="afs-card afs-card--region">
+                <div class="afs-card__header">
+                    <span class="afs-card__icon">📍</span>
+                    <h2>Мой регион</h2>
+                </div>
+                <p v-if="props.user.zone" class="afs-region-info">
+                    Текущий регион: <strong>{{ props.user.zone.oblast_name }}</strong>
+                </p>
+                <p v-else class="afs-region-info afs-region-info--empty">
+                    Вы ещё не выбрали регион для уведомлений
+                </p>
+                <Link href="/dashboard?subscribe=1" class="afs-btn afs-btn--subscribe">
+                    📍 Подписаться на уведомления региона
+                </Link>
+            </section>
+
             <div class="afs-cards">
 
                 <!-- Personal info -->
@@ -310,6 +327,40 @@ const logout = () => {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* ── Region card ── */
+.afs-card--region {
+    margin-bottom: 8px;
+}
+
+.afs-region-info {
+    color: #c8bfb5;
+    font-size: 14px;
+    margin: 0 0 18px;
+    line-height: 1.5;
+}
+.afs-region-info strong {
+    color: #4ade80;
+}
+.afs-region-info--empty {
+    color: #888;
+    font-style: italic;
+}
+
+.afs-btn--subscribe {
+    display: inline-block;
+    background: #00bcd4;
+    color: #fff;
+    text-decoration: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.18s;
+}
+.afs-btn--subscribe:hover {
+    background: #00acc1;
+}
 </style>
 
 <style>
@@ -323,4 +374,9 @@ html[data-theme="light"] .afs-field label   { color: var(--afs-text2); }
 html[data-theme="light"] .afs-field input   { background: var(--afs-bg3); color: var(--afs-text); border-color: var(--afs-border); }
 html[data-theme="light"] .afs-field input::placeholder { color: var(--afs-muted2); }
 html[data-theme="light"] .afs-field input:focus { border-color: var(--afs-accent2); }
+html[data-theme="light"] .afs-region-info        { color: var(--afs-text2); }
+html[data-theme="light"] .afs-region-info strong  { color: #007a3a; }
+html[data-theme="light"] .afs-region-info--empty  { color: var(--afs-muted); }
+html[data-theme="light"] .afs-btn--subscribe      { background: #0097a7; }
+html[data-theme="light"] .afs-btn--subscribe:hover { background: #00838f; }
 </style>

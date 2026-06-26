@@ -55,4 +55,23 @@ class ZoneController extends Controller
             ),
         ]);
     }
+
+    public function hotspots(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'bbox_west'  => ['required', 'numeric', 'between:-180,180'],
+            'bbox_south' => ['required', 'numeric', 'between:-90,90'],
+            'bbox_east'  => ['required', 'numeric', 'between:-180,180'],
+            'bbox_north' => ['required', 'numeric', 'between:-90,90'],
+        ]);
+
+        return response()->json([
+            'hotspots' => $this->firms->getHotspots(
+                $data['bbox_west'],
+                $data['bbox_south'],
+                $data['bbox_east'],
+                $data['bbox_north'],
+            ),
+        ]);
+    }
 }

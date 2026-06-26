@@ -9,6 +9,7 @@ use App\Http\Controllers\SubsidyController;
 use App\Http\Controllers\YieldController;
 use App\Http\Controllers\AboutController;
 use App\Http\Controllers\EcologyController;
+use App\Http\Controllers\ForecastController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -25,6 +26,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::patch('/zone', [ZoneController::class, 'store'])->name('zone.store');
     Route::get('/zone/fires', [ZoneController::class, 'getFires'])->name('zone.fires');
+    Route::post('/zone/hotspots', [ZoneController::class, 'hotspots'])->name('zone.hotspots');
+    Route::post('/forecast/risks', [ForecastController::class, 'risks'])->name('forecast.risks');
 
     Route::post('/n8n/analyze', [N8nProxyController::class, 'analyze'])->name('n8n.analyze');
 

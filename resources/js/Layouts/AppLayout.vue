@@ -24,9 +24,9 @@ const setLocale = (lang) => {
                 </Link>
                 <nav class="afs-nav">
                     <Link href="/dashboard" class="afs-nav__btn">{{ t('nav.home') }}</Link>
-                    <Link href="/subsidies" class="afs-nav__btn">{{ t('nav.subsidies') }}</Link>
-                    <Link href="/ecology" class="afs-nav__btn">{{ t('nav.ecology') }}</Link>
-                    <Link href="/yield" class="afs-nav__btn">{{ t('nav.yield') }}</Link>
+                    <!-- <Link href="/subsidies" class="afs-nav__btn">{{ t('nav.subsidies') }}</Link> -->
+                    <!-- <Link href="/ecology" class="afs-nav__btn">{{ t('nav.ecology') }}</Link> -->
+                    <!-- <Link href="/yield" class="afs-nav__btn">{{ t('nav.yield') }}</Link> -->
                     <Link href="/about" class="afs-nav__btn">{{ t('nav.about') }}</Link>
                     <Link href="/profile" class="afs-nav__btn">{{ t('nav.profile') }}</Link>
 

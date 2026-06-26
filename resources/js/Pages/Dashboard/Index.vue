@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import axios from 'axios'
@@ -93,6 +93,11 @@ const REGIONS = {
     ],
 }
 
+// ── Subscribe mode ───────────────────────────────────────────────────────────
+const subscribeMode = ref(new URLSearchParams(window.location.search).has('subscribe'))
+const savedZone = ref(props.currentZone ? { ...props.currentZone } : null)
+const subscribeSaving = ref(false)
+
 // ── Reactive state ────────────────────────────────────────────────────────────
 const mapEl = ref(null)
 const selectedOblast = ref(null)
@@ -102,17 +107,133 @@ const fireSeverityFilter = ref(null)
 const loading = ref(false)
 const errorMsg = ref(null)
 const activeTab = ref('map')
+const mapLayer = ref('fires') // 'fires' | 'forecast'
+
+// ── Forecast state ──────────────────────────────────────────────────────────
+const forecastData = ref({})
+const forecastLoading = ref(false)
+
+const RISK_LABELS = {
+    heavy_rain:  { icon: '🌧️', label: 'Сильный дождь',  color: '#3b82f6' },
+    hail_storm:  { icon: '🌨️', label: 'Град / гроза',   color: '#8b5cf6' },
+    drought:     { icon: '🏜️', label: 'Засуха',          color: '#f59e0b' },
+    fire:        { icon: '🔥', label: 'Пожары',          color: '#ef4444' },
+    strong_wind: { icon: '💨', label: 'Сильный ветер',   color: '#06b6d4' },
+    frost:       { icon: '❄️', label: 'Заморозки',       color: '#93c5fd' },
+}
+
+const FORECAST_MARKER_COLORS = { high: '#ef4444', nominal: '#f59e0b', low: '#4ade80' }
 
 function switchTab(tab) {
     activeTab.value = tab
     if (tab === 'crop') fetchSessions()
 }
 
+function switchMapLayer(layer) {
+    mapLayer.value = layer
+    hotspotLayer?.clearLayers()
+    forecastMarkerLayer?.clearLayers()
+    if (layer === 'fires') {
+        renderHotspots(filteredHotspots.value)
+    } else if (layer === 'forecast' && selectedCountry.value) {
+        loadAllForecasts()
+    }
+}
+
+let forecastMarkerLayer = null
+
+async function fetchRegionForecast(oblast) {
+    const center = oblastCenter(oblast)
+    try {
+        const { data } = await axios.post('/forecast/risks', {
+            lat: center[0],
+            lon: center[1],
+            bbox_west: oblast.west,
+            bbox_south: oblast.south,
+            bbox_east: oblast.east,
+            bbox_north: oblast.north,
+        })
+        return data
+    } catch {
+        return null
+    }
+}
+
+async function loadAllForecasts() {
+    if (!selectedCountry.value) return
+    forecastLoading.value = true
+    forecastMarkerLayer?.clearLayers()
+
+    const regions = REGIONS[selectedCountry.value.name] ?? []
+    for (const oblast of regions) {
+        if (oblast.name.startsWith('г.')) continue
+        const result = await fetchRegionForecast(oblast)
+        if (result?.forecast) {
+            forecastData.value[oblast.name] = result
+            renderForecastMarker(oblast, result)
+        }
+        await new Promise(r => setTimeout(r, 350))
+    }
+    forecastLoading.value = false
+}
+
+async function loadSingleForecast(oblast) {
+    forecastLoading.value = true
+    const result = await fetchRegionForecast(oblast)
+    if (result?.forecast) {
+        forecastData.value[oblast.name] = result
+    }
+    forecastLoading.value = false
+}
+
+function renderForecastMarker(oblast, data) {
+    if (!forecastMarkerLayer || mapLayer.value !== 'forecast') return
+    const sev = data.forecast?.severity ?? 'low'
+    const risks = data.forecast?.risks ?? []
+    const center = oblastCenter(oblast)
+    const color = FORECAST_MARKER_COLORS[sev] || FORECAST_MARKER_COLORS.low
+
+    const marker = L.circleMarker(center, {
+        radius: risks.length > 0 ? 10 : 7,
+        color: '#fff',
+        weight: 2,
+        fillColor: color,
+        fillOpacity: 0.9,
+    }).addTo(forecastMarkerLayer)
+
+    const riskLines = risks.map(r => {
+        const cfg = RISK_LABELS[r.type] || { icon: '⚠️', label: r.type }
+        return `${cfg.icon} ${cfg.label}: ${r.detail}`
+    }).join('<br>')
+
+    const s = data.forecast?.summary
+    marker.bindPopup(
+        `<div style="font-family:sans-serif;font-size:13px;line-height:1.6;min-width:200px">` +
+        `<b>${oblast.name}</b><br>` +
+        `🌡️ ${s?.temp_min}…${s?.temp_max}°C &nbsp; 💧 ${s?.precip_total} мм &nbsp; 💨 ${s?.wind_max} м/с<br>` +
+        (riskLines ? `<hr style="border-color:#333;margin:4px 0">${riskLines}` : `<span style="color:#4ade80">✅ Рисков не обнаружено</span>`) +
+        `</div>`
+    )
+
+    marker.bindTooltip(
+        risks.length > 0
+            ? risks.map(r => (RISK_LABELS[r.type]?.icon || '⚠️')).join('') + ' ' + oblast.name
+            : '✅ ' + oblast.name,
+        { permanent: false, direction: 'right', offset: [10, 0] }
+    )
+}
+
+const selectedForecast = computed(() => {
+    if (!selectedOblast.value) return null
+    return forecastData.value[selectedOblast.value.name] ?? null
+})
+
 // ── Crop Chat ─────────────────────────────────────────────────────────────────
 const cropMessages = ref([])
 const cropInput = ref('')
 const cropImage = ref(null)
 const cropMediaType = ref('image/jpeg')
+const cropFileName = ref(null)
 const cropPreview = ref(null)
 const cropLoading = ref(false)
 const cropFileRef = ref(null)
@@ -187,6 +308,7 @@ function onCropFile(e) {
     const file = e.target.files[0]
     if (!file) return
     cropMediaType.value = file.type || 'image/jpeg'
+    cropFileName.value = file.name || null
     const reader = new FileReader()
     reader.onload = (ev) => {
         cropPreview.value = ev.target.result
@@ -198,6 +320,7 @@ function onCropFile(e) {
 function clearCropImage() {
     cropImage.value = null
     cropPreview.value = null
+    cropFileName.value = null
     if (cropFileRef.value) cropFileRef.value.value = ''
 }
 
@@ -205,6 +328,7 @@ async function sendCrop() {
     const text = cropInput.value.trim()
     const img = cropImage.value
     const media = cropMediaType.value
+    const fname = cropFileName.value
     if (!text && !img) return
 
     cropMessages.value.push({ role: 'user', text, preview: cropPreview.value })
@@ -219,6 +343,7 @@ async function sendCrop() {
             message: text,
             image: img,
             mediaType: media,
+            fileName: fname,
             sessionId: currentSessionId.value,
         })
 
@@ -358,16 +483,21 @@ let rectLayers = {}
 let hotspotLayer = null
 let cityMarkerLayer = null
 
-// ── Styles ───────────────────────────────────────────────────────────────────
-const countryStyle      = () => ({ color: '#00bcd4', weight: 1.5, fillColor: '#00bcd4', fillOpacity: 0.08 })
-const countryActiveStyle= () => ({ color: '#00bcd4', weight: 2.5, fillColor: '#00bcd4', fillOpacity: 0.20 })
-const normalStyle       = () => ({ color: '#00e676', weight: 1.5, fillColor: '#00e676', fillOpacity: 0.07 })
-const activeStyle       = () => ({ color: '#00e676', weight: 2.5, fillColor: '#00e676', fillOpacity: 0.20 })
-const fireStyle         = () => ({ color: '#cc0000', weight: 2,   fillColor: '#ff2200', fillOpacity: 0.35 })
-const fireActiveStyle   = () => ({ color: '#cc0000', weight: 3,   fillColor: '#ff2200', fillOpacity: 0.50 })
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function oblastBounds(o) {
     return [[o.south, o.west], [o.north, o.east]]
 }
+function oblastCenter(o) {
+    return [(o.south + o.north) / 2, (o.west + o.east) / 2]
+}
+
+// ── Marker styles ───────────────────────────────────────────────────────────
+const countryMarkerStyle      = () => ({ radius: 10, color: '#fff', weight: 2, fillColor: '#00bcd4', fillOpacity: 0.85 })
+const countryActiveMarkerStyle= () => ({ radius: 12, color: '#fff', weight: 2.5, fillColor: '#00e5ff', fillOpacity: 1 })
+const normalMarkerStyle       = () => ({ radius: 8, color: '#fff', weight: 1.5, fillColor: '#00e676', fillOpacity: 0.85 })
+const activeMarkerStyle       = () => ({ radius: 10, color: '#fff', weight: 2, fillColor: '#00e676', fillOpacity: 1 })
+const fireMarkerStyle         = () => ({ radius: 9, color: '#fff', weight: 1.5, fillColor: '#ff2200', fillOpacity: 0.9 })
+const fireActiveMarkerStyle   = () => ({ radius: 11, color: '#fff', weight: 2, fillColor: '#ff2200', fillOpacity: 1 })
 
 // ── Map init ──────────────────────────────────────────────────────────────────
 function initMap() {
@@ -380,13 +510,14 @@ function initMap() {
 
     hotspotLayer = L.layerGroup().addTo(map)
     cityMarkerLayer = L.layerGroup().addTo(map)
+    forecastMarkerLayer = L.layerGroup().addTo(map)
 
     COUNTRIES.forEach(country => {
-        const rect = L.rectangle(oblastBounds(country), countryStyle())
+        const marker = L.circleMarker(oblastCenter(country), countryMarkerStyle())
             .addTo(map)
-            .bindTooltip(country.flag + ' ' + country.name, { sticky: true })
-        rect.on('click', () => selectCountry(country))
-        countryLayers[country.name] = rect
+            .bindTooltip(country.flag + ' ' + country.name, { permanent: true, direction: 'right', offset: [10, 0], className: 'afs-country-tooltip' })
+        marker.on('click', () => selectCountry(country))
+        countryLayers[country.name] = marker
     })
 
     if (props.currentZone) {
@@ -420,13 +551,13 @@ async function selectCity(city) {
     selectedCity.value = city
     const r = 0.35
     map.flyTo([city.lat, city.lon], 10, { duration: 0.7 })
-    await saveAndFetch({ name: city.name, west: city.lon - r, east: city.lon + r, south: city.lat - r, north: city.lat + r })
+    await fetchFires({ name: city.name, west: city.lon - r, east: city.lon + r, south: city.lat - r, north: city.lat + r })
 }
 
 async function selectGridCell(cell) {
     selectedCity.value = { name: `Блок ${cell.label}`, ...cell }
     map.fitBounds([[cell.south, cell.west], [cell.north, cell.east]], { padding: [16, 16] })
-    await saveAndFetch({ name: `Блок ${cell.label}`, ...cell })
+    await fetchFires({ name: `Блок ${cell.label}`, ...cell })
 }
 
 function backToCountries() {
@@ -435,13 +566,15 @@ function backToCountries() {
     selectedOblast.value = null
     selectedCity.value = null
     oblastFireHotspots.value = {}
+    forecastData.value = {}
     clearDetail()
     hotspots.value = []
     hotspotLayer.clearLayers()
+    forecastMarkerLayer?.clearLayers()
     Object.values(rectLayers).forEach(l => map.removeLayer(l))
     rectLayers = {}
     Object.values(countryLayers).forEach(l => {
-        l.setStyle(countryStyle())
+        l.setStyle(countryMarkerStyle())
         if (!map.hasLayer(l)) l.addTo(map)
     })
     map.flyTo([41.0, 62.0], 4, { duration: 0.8 })
@@ -454,7 +587,7 @@ function backToOblasts() {
     if (selectedOblast.value) {
         const name = selectedOblast.value.name
         const count = oblastFireCounts.value[name] ?? 0
-        rectLayers[name]?.setStyle(count > 0 ? fireStyle() : normalStyle())
+        rectLayers[name]?.setStyle(count > 0 ? fireMarkerStyle() : normalMarkerStyle())
         selectedOblast.value = null
     }
     hotspots.value = []
@@ -468,7 +601,7 @@ function backToOblasts() {
 function selectCountry(country) {
     Object.entries(countryLayers).forEach(([name, l]) => {
         if (name !== country.name) map.removeLayer(l)
-        else l.setStyle(countryActiveStyle())
+        else l.setStyle(countryActiveMarkerStyle())
     })
     selectedCountry.value = country
     selectedOblast.value = null
@@ -484,11 +617,11 @@ function selectCountry(country) {
 
     const regions = REGIONS[country.name] ?? []
     regions.forEach(oblast => {
-        const rect = L.rectangle(oblastBounds(oblast), normalStyle())
+        const marker = L.circleMarker(oblastCenter(oblast), normalMarkerStyle())
             .addTo(map)
-            .bindTooltip(oblast.name, { sticky: true })
-        rect.on('click', () => selectOblast(oblast))
-        rectLayers[oblast.name] = rect
+            .bindTooltip(oblast.name, { permanent: false, direction: 'right', offset: [8, 0] })
+        marker.on('click', () => selectOblast(oblast))
+        rectLayers[oblast.name] = marker
     })
 
     map.fitBounds(oblastBounds(country), { padding: [30, 30] })
@@ -498,15 +631,18 @@ function selectCountry(country) {
 function selectOblast(oblast) {
     clearDetail()
     if (selectedOblast.value) {
-        rectLayers[selectedOblast.value.name]?.setStyle(normalStyle())
+        rectLayers[selectedOblast.value.name]?.setStyle(normalMarkerStyle())
     }
     selectedOblast.value = oblast
     selectedCity.value = null
     selectionLevel.value = 'detail'
-    rectLayers[oblast.name]?.setStyle(activeStyle())
+    rectLayers[oblast.name]?.setStyle(activeMarkerStyle())
     map.fitBounds(oblastBounds(oblast), { padding: [30, 30] })
     drawDetail(oblast)
-    saveAndFetch(oblast)
+    fetchFires(oblast)
+    if (mapLayer.value === 'forecast' && !forecastData.value[oblast.name]) {
+        loadSingleForecast(oblast)
+    }
 }
 
 // Фоновая проверка пожаров по регионам выбранной страны
@@ -516,8 +652,7 @@ async function checkAllOblastsFires() {
     for (const oblast of regions) {
         if (oblast.name.startsWith('г.')) continue
         try {
-            const { data } = await axios.patch('/zone', {
-                oblast_name: oblast.name,
+            const { data } = await axios.post('/zone/hotspots', {
                 bbox_west: oblast.west,
                 bbox_south: oblast.south,
                 bbox_east: oblast.east,
@@ -531,15 +666,14 @@ async function checkAllOblastsFires() {
 
 onMounted(() => { initMap() })
 
-async function saveAndFetch(oblast) {
+async function fetchFires(oblast) {
     loading.value = true
     errorMsg.value = null
     hotspots.value = []
     hotspotLayer.clearLayers()
 
     try {
-        const { data } = await axios.patch('/zone', {
-            oblast_name: oblast.name,
+        const { data } = await axios.post('/zone/hotspots', {
             bbox_west: oblast.west,
             bbox_south: oblast.south,
             bbox_east: oblast.east,
@@ -554,10 +688,49 @@ async function saveAndFetch(oblast) {
     }
 }
 
+async function saveSubscription() {
+    if (!selectedOblast.value) return
+    subscribeSaving.value = true
+    try {
+        const oblast = selectedOblast.value
+        const { data } = await axios.patch('/zone', {
+            oblast_name: oblast.name,
+            bbox_west: oblast.west,
+            bbox_south: oblast.south,
+            bbox_east: oblast.east,
+            bbox_north: oblast.north,
+        })
+        savedZone.value = data.zone
+        subscribeMode.value = false
+        window.history.replaceState({}, '', window.location.pathname)
+    } catch {
+        errorMsg.value = 'Ошибка сохранения региона.'
+    } finally {
+        subscribeSaving.value = false
+    }
+}
+
+function goToSavedZone() {
+    if (!savedZone.value) return
+    const zone = savedZone.value
+    const oblastName = zone.oblast_name
+    for (const [countryName, regions] of Object.entries(REGIONS)) {
+        const found = regions.find(o => o.name === oblastName)
+        if (found) {
+            const country = COUNTRIES.find(c => c.name === countryName)
+            if (country && selectedCountry.value?.name !== countryName) {
+                selectCountry(country)
+            }
+            nextTick(() => selectOblast(found))
+            return
+        }
+    }
+}
+
 async function restoreSelection(oblast) {
     selectedOblast.value = oblast
     selectionLevel.value = 'detail'
-    rectLayers[oblast.name]?.setStyle(activeStyle())
+    rectLayers[oblast.name]?.setStyle(activeMarkerStyle())
     loading.value = true
     try {
         const { data } = await axios.get('/zone/fires')
@@ -585,7 +758,7 @@ watch(oblastFireCounts, (newCounts) => {
     for (const [name, count] of Object.entries(newCounts)) {
         if (!rectLayers[name]) continue
         if (selectedOblast.value?.name === name) continue
-        rectLayers[name].setStyle(count > 0 ? fireStyle() : normalStyle())
+        rectLayers[name].setStyle(count > 0 ? fireMarkerStyle() : normalMarkerStyle())
     }
 }, { deep: true })
 
@@ -614,12 +787,10 @@ function renderHotspots(spots) {
             .addTo(hotspotLayer)
     })
 
-    // Подсветить регион если есть пожары
     if (selectedOblast.value) {
         const hasFire = spots.length > 0
-        const isActive = true // мы только что выбрали этот регион
         rectLayers[selectedOblast.value.name]?.setStyle(
-            hasFire ? fireActiveStyle() : activeStyle()
+            hasFire ? fireActiveMarkerStyle() : activeMarkerStyle()
         )
     }
 }
@@ -764,11 +935,21 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
         <!-- Tabs -->
         <div class="afs-tabs">
             <button class="afs-tab" :class="{ 'afs-tab--active': activeTab === 'map' }" @click="switchTab('map')">
-                Карта пожаров
+                Карта
             </button>
             <button class="afs-tab" :class="{ 'afs-tab--active': activeTab === 'crop' }" @click="switchTab('crop')">
                 ИИ Помощник агроному
             </button>
+
+            <!-- Map layer sub-toggle -->
+            <div v-if="activeTab === 'map'" class="afs-layer-toggle">
+                <button class="afs-layer-btn" :class="{ 'afs-layer-btn--active': mapLayer === 'fires' }" @click="switchMapLayer('fires')">
+                    🔥 Пожары
+                </button>
+                <button class="afs-layer-btn" :class="{ 'afs-layer-btn--active': mapLayer === 'forecast' }" @click="switchMapLayer('forecast')">
+                    ⛈️ Прогноз угроз
+                </button>
+            </div>
         </div>
 
         <!-- Workspace -->
@@ -842,10 +1023,26 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 
             <!-- Map panel -->
             <div v-show="activeTab === 'map'" class="afs-map-panel">
+
+                <!-- Subscribe mode banner -->
+                <div v-if="subscribeMode" class="afs-subscribe-banner">
+                    <span>📍 Выберите регион для подписки на уведомления</span>
+                    <button class="afs-subscribe-banner__cancel" @click="subscribeMode = false; window.history.replaceState({}, '', window.location.pathname)">Отмена</button>
+                </div>
+
                 <div ref="mapEl" class="afs-map"></div>
 
-                <!-- Fire filter bars -->
-                <div class="afs-fire-filters">
+                <!-- Return to saved zone button -->
+                <button
+                    v-if="savedZone && !subscribeMode && selectedOblast?.name !== savedZone.oblast_name"
+                    class="afs-return-zone-btn"
+                    @click="goToSavedZone"
+                >
+                    📍 Вернуться к своему региону ({{ savedZone.oblast_name }})
+                </button>
+
+                <!-- Fire filter bars (fires layer only) -->
+                <div v-if="mapLayer === 'fires'" class="afs-fire-filters">
                     <div class="afs-fire-filter-bar">
                         <span class="afs-filt-label">🔥 Период:</span>
                         <button class="afs-filt-btn" :class="{ 'afs-filt-btn--active': fireHoursFilter === 12 }" @click="fireHoursFilter = 12">12ч</button>
@@ -866,14 +1063,14 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                     </div>
                 </div>
 
-                <!-- Loading overlay -->
-                <div v-if="loading" class="afs-map-loading">
+                <!-- Loading overlay (fires) -->
+                <div v-if="mapLayer === 'fires' && loading" class="afs-map-loading">
                     <div class="afs-spinner"></div>
                     <span>Загрузка данных NASA FIRMS...</span>
                 </div>
 
                 <!-- Summary bar -->
-                <div v-if="selectedOblast && !loading" class="afs-summary-bar">
+                <div v-if="mapLayer === 'fires' && selectedOblast && !loading" class="afs-summary-bar">
                     <span v-if="selectedCountry" class="afs-summary-bar__country">
                         {{ selectedCountry.flag }} {{ selectedCountry.name }}
                     </span>
@@ -897,8 +1094,70 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                     Выберите регион на карте или в списке слева
                 </div>
 
-                <!-- Region info panel -->
-                <div v-if="selectedOblast && !loading" class="afs-region-panel">
+                <!-- Forecast info panel -->
+                <div v-if="mapLayer === 'forecast' && selectedOblast && !forecastLoading" class="afs-region-panel afs-forecast-panel">
+                    <div class="afs-rp__header">
+                        <span class="afs-rp__title">⛈️ {{ selectedOblast.name.toUpperCase() }}</span>
+                        <button class="afs-rp__close" @click="backToOblasts" title="Закрыть">×</button>
+                    </div>
+
+                    <!-- Weather summary -->
+                    <div v-if="selectedForecast?.forecast?.summary" class="afs-rp__section">
+                        <div class="afs-rp__section-title">Погода на 5 дней</div>
+                        <div class="afs-rp__eco-row">
+                            <div class="afs-rp__eco-card">
+                                <div class="afs-rp__eco-label">🌡️ Темп.</div>
+                                <div class="afs-rp__eco-value">{{ selectedForecast.forecast.summary.temp_min }}…{{ selectedForecast.forecast.summary.temp_max }}°C</div>
+                            </div>
+                            <div class="afs-rp__eco-card">
+                                <div class="afs-rp__eco-label">💧 Осадки</div>
+                                <div class="afs-rp__eco-value">{{ selectedForecast.forecast.summary.precip_total }} мм</div>
+                            </div>
+                            <div class="afs-rp__eco-card">
+                                <div class="afs-rp__eco-label">💨 Ветер</div>
+                                <div class="afs-rp__eco-value">{{ selectedForecast.forecast.summary.wind_max }} м/с</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Risks -->
+                    <div class="afs-rp__section">
+                        <div class="afs-rp__section-title">Угрозы для урожая</div>
+                        <div v-if="!selectedForecast?.forecast?.risks?.length" class="afs-rp__fire-block">
+                            <span class="afs-rp-badge afs-rp-badge--green">✅ Угроз не обнаружено</span>
+                        </div>
+                        <div v-else class="afs-forecast-risks">
+                            <div v-for="(risk, i) in selectedForecast.forecast.risks" :key="i" class="afs-forecast-risk"
+                                :class="'afs-forecast-risk--' + risk.severity">
+                                <span class="afs-forecast-risk__icon">{{ RISK_LABELS[risk.type]?.icon || '⚠️' }}</span>
+                                <div class="afs-forecast-risk__body">
+                                    <span class="afs-forecast-risk__label">{{ RISK_LABELS[risk.type]?.label || risk.type }}</span>
+                                    <span class="afs-forecast-risk__detail">{{ risk.detail }}</span>
+                                    <span v-if="risk.date" class="afs-forecast-risk__date">{{ risk.date }}</span>
+                                </div>
+                                <span class="afs-rp-badge" :class="{
+                                    'afs-rp-badge--red': risk.severity === 'high',
+                                    'afs-rp-badge--orange': risk.severity === 'nominal',
+                                    'afs-rp-badge--yellow': risk.severity === 'low',
+                                }">{{ risk.severity === 'high' ? 'Высокий' : risk.severity === 'nominal' ? 'Средний' : 'Низкий' }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Forecast loading hint -->
+                    <div v-if="!selectedForecast" class="afs-rp__section">
+                        <p class="afs-rp__update-text">Загрузка прогноза...</p>
+                    </div>
+                </div>
+
+                <!-- Forecast loading overlay -->
+                <div v-if="mapLayer === 'forecast' && forecastLoading" class="afs-map-loading">
+                    <div class="afs-spinner"></div>
+                    <span>Загрузка прогнозов OpenWeatherMap...</span>
+                </div>
+
+                <!-- Region info panel (fires layer) -->
+                <div v-if="mapLayer === 'fires' && selectedOblast && !loading" class="afs-region-panel">
 
                     <div class="afs-rp__header">
                         <span class="afs-rp__title">🌿 {{ selectedOblast.name.toUpperCase() }}</span>
@@ -973,6 +1232,16 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Subscribe save button -->
+                    <button
+                        v-if="subscribeMode"
+                        class="afs-rp__subscribe-btn"
+                        :disabled="subscribeSaving"
+                        @click="saveSubscription"
+                    >
+                        {{ subscribeSaving ? 'Сохранение...' : '📍 Сохранить как мой регион' }}
+                    </button>
 
                     <!-- AI button -->
                     <button class="afs-rp__ai-btn" @click="openAiWithContext">
@@ -2302,6 +2571,136 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
     color: #c8bfb5;
 }
 
+/* ── Map layer toggle ── */
+.afs-layer-toggle {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+    background: #111;
+    border-radius: 8px;
+    padding: 2px;
+    border: 1px solid #2d2d2d;
+}
+.afs-layer-btn {
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+.afs-layer-btn:hover { background: #1e2a20; color: #c8bfb5; }
+.afs-layer-btn--active { background: #1e2a20; color: #00e676; }
+
+/* ── Forecast panel ── */
+.afs-forecast-panel { border-top-color: #00bcd4 !important; }
+
+.afs-forecast-risks {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.afs-forecast-risk {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #2d2d2d;
+    background: #111;
+}
+.afs-forecast-risk--high    { border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.06); }
+.afs-forecast-risk--nominal { border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.06); }
+
+.afs-forecast-risk__icon { font-size: 20px; flex-shrink: 0; }
+
+.afs-forecast-risk__body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.afs-forecast-risk__label { font-size: 12px; font-weight: 700; color: #e0d6cc; }
+.afs-forecast-risk__detail { font-size: 11px; color: #888; }
+.afs-forecast-risk__date { font-size: 10px; color: #555; }
+
+/* ── Subscribe save button ── */
+.afs-rp__subscribe-btn {
+    margin: 12px 14px 0;
+    padding: 10px 14px;
+    background: #00bcd4;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.18s;
+    width: calc(100% - 28px);
+    flex-shrink: 0;
+}
+.afs-rp__subscribe-btn:hover:not(:disabled) { background: #00acc1; }
+.afs-rp__subscribe-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Subscribe banner ── */
+.afs-subscribe-banner {
+    background: rgba(0, 188, 212, 0.12);
+    border-bottom: 2px solid #00bcd4;
+    color: #00e5ff;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+    z-index: 3;
+}
+.afs-subscribe-banner__cancel {
+    background: transparent;
+    border: 1px solid rgba(0, 188, 212, 0.4);
+    color: #00e5ff;
+    padding: 4px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.afs-subscribe-banner__cancel:hover { background: rgba(0, 188, 212, 0.15); }
+
+/* ── Return to saved zone button ── */
+.afs-return-zone-btn {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    background: rgba(18, 18, 18, 0.92);
+    border: 1px solid #00bcd4;
+    color: #00e5ff;
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+.afs-return-zone-btn:hover {
+    background: rgba(0, 188, 212, 0.15);
+    border-color: #00e5ff;
+}
+
 /* ── AI button ── */
 .afs-rp__ai-btn {
     margin: 12px 14px;
@@ -2322,6 +2721,31 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 </style>
 
 <!-- ── Light theme overrides (non-scoped, wins over scoped via html[] specificity) ── -->
+<style>
+.afs-country-tooltip {
+    background: rgba(18, 18, 18, 0.92);
+    color: #e0d6cc;
+    border: 1px solid #2d2d2d;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.afs-country-tooltip::before {
+    border-right-color: rgba(18, 18, 18, 0.92) !important;
+}
+html[data-theme="light"] .afs-country-tooltip {
+    background: rgba(255, 255, 255, 0.95);
+    color: #1a2e1d;
+    border-color: #c4ddc8;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+html[data-theme="light"] .afs-country-tooltip::before {
+    border-right-color: rgba(255, 255, 255, 0.95) !important;
+}
+</style>
+
 <style>
 html[data-theme="light"] .afs-error-banner         { background: #fff0f0; border-bottom-color: #fca5a5; color: #991b1b; }
 
@@ -2426,4 +2850,20 @@ html[data-theme="light"] .afs-filt-btn--active { background: rgba(220,38,38,0.10
 html[data-theme="light"] .afs-sev-btn--low-active     { background: rgba(202,138,4,0.12) !important; border-color: #a16207 !important; color: #a16207 !important; }
 html[data-theme="light"] .afs-sev-btn--nominal-active  { background: rgba(234,88,12,0.12) !important; border-color: #c2410c !important; color: #c2410c !important; }
 html[data-theme="light"] .afs-sev-btn--high-active     { background: rgba(220,38,38,0.12) !important; border-color: #dc2626 !important; color: #dc2626 !important; }
+html[data-theme="light"] .afs-layer-toggle              { background: #f4f7f4; border-color: #c4ddc8; }
+html[data-theme="light"] .afs-layer-btn                { color: #6b8570; }
+html[data-theme="light"] .afs-layer-btn:hover          { background: #e6f4ea; color: #1a2e1d; }
+html[data-theme="light"] .afs-layer-btn--active        { background: #e6f4ea; color: #007a3a; }
+html[data-theme="light"] .afs-forecast-panel           { border-top-color: #0097a7 !important; }
+html[data-theme="light"] .afs-forecast-risk            { background: #f4f7f4; border-color: #c4ddc8; }
+html[data-theme="light"] .afs-forecast-risk--high      { border-color: rgba(220,38,38,0.3); background: rgba(220,38,38,0.04); }
+html[data-theme="light"] .afs-forecast-risk--nominal   { border-color: rgba(202,138,4,0.3); background: rgba(202,138,4,0.04); }
+html[data-theme="light"] .afs-forecast-risk__label     { color: #1a2e1d; }
+html[data-theme="light"] .afs-forecast-risk__detail    { color: #6b8570; }
+html[data-theme="light"] .afs-subscribe-banner         { background: rgba(0,188,212,0.08); border-bottom-color: #0097a7; color: #00838f; }
+html[data-theme="light"] .afs-subscribe-banner__cancel { border-color: rgba(0,188,212,0.3); color: #00838f; }
+html[data-theme="light"] .afs-return-zone-btn          { background: rgba(255,255,255,0.94); border-color: #0097a7; color: #00838f; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+html[data-theme="light"] .afs-return-zone-btn:hover    { background: rgba(0,188,212,0.08); }
+html[data-theme="light"] .afs-rp__subscribe-btn        { background: #0097a7; }
+html[data-theme="light"] .afs-rp__subscribe-btn:hover:not(:disabled) { background: #00838f; }
 </style>

@@ -11,8 +11,12 @@ class ProfileController extends Controller
 {
     public function show()
     {
+        $user = auth()->user();
+
         return Inertia::render('Profile/Index', [
-            'user' => auth()->user()->only('name', 'email'),
+            'user' => array_merge($user->only('name', 'email'), [
+                'zone' => $user->zone,
+            ]),
         ]);
     }
 
