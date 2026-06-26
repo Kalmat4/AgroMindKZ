@@ -14,6 +14,8 @@ export default {
     degradation: 'Degradation', water: 'Water stress', co2: 'CO₂',
     ask_ai: 'Ask AI Agronomist →',
     risk_moderate: 'MODERATE', risk_high: 'HIGH', risk_critical: 'CRITICAL',
+    severity_all: 'All', severity_low: 'Low', severity_nominal: 'Moderate', severity_high: 'High',
+    severity_label: 'Severity',
     no_fires_badge: 'No active fires',
     loading: 'Loading NASA FIRMS data...',
     hotspots_table: 'Latest Hotspots',

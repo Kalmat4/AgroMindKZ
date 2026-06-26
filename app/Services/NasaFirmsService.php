@@ -58,12 +58,16 @@ class NasaFirmsService
                 continue;
             }
 
+            $frp = (float) ($row['frp'] ?? 0);
+            $brightness = (float) ($row['bright_ti4'] ?? 0);
+
             $result[] = [
                 'lat'        => (float) $row['latitude'],
                 'lon'        => (float) $row['longitude'],
-                'brightness' => (float) ($row['bright_ti4'] ?? 0),
+                'brightness' => $brightness,
                 'confidence' => $row['confidence'] ?? '',
-                'frp'        => (float) ($row['frp'] ?? 0),
+                'frp'        => $frp,
+                'severity'   => self::classifySeverity($frp, $brightness),
                 'daynight'   => $row['daynight'] ?? '',
                 'acq_date'   => $row['acq_date'] ?? '',
                 'acq_time'   => $row['acq_time'] ?? '',
@@ -72,5 +76,18 @@ class NasaFirmsService
         }
 
         return $result;
+    }
+
+    private static function classifySeverity(float $frp, float $brightness): string
+    {
+        if ($frp >= 25 || $brightness >= 400) {
+            return 'high';
+        }
+
+        if ($frp >= 8 || $brightness >= 340) {
+            return 'nominal';
+        }
+
+        return 'low';
     }
 }

@@ -14,6 +14,8 @@ export default {
     degradation: 'Деградация', water: 'Вод. стресс', co2: 'CO₂',
     ask_ai: 'Спросить ИИ-агронома →',
     risk_moderate: 'УМЕРЕННЫЙ', risk_high: 'ВЫСОКИЙ', risk_critical: 'КРИТИЧЕСКИЙ',
+    severity_all: 'Все', severity_low: 'Слабый', severity_nominal: 'Умеренный', severity_high: 'Высокий',
+    severity_label: 'Степень',
     no_fires_badge: 'Активных пожаров нет',
     loading: 'Загрузка данных NASA FIRMS...',
     hotspots_table: 'Последние очаги',

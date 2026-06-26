@@ -98,6 +98,7 @@ const mapEl = ref(null)
 const selectedOblast = ref(null)
 const hotspots = ref([])
 const fireHoursFilter = ref(48)
+const fireSeverityFilter = ref(null)
 const loading = ref(false)
 const errorMsg = ref(null)
 const activeTab = ref('map')
@@ -592,12 +593,16 @@ watch(oblastFireCounts, (newCounts) => {
 function renderHotspots(spots) {
     hotspotLayer.clearLayers()
     spots.forEach(spot => {
+        const sev = getSpotSeverity(spot)
+        const cfg = SEVERITY_CONFIG[sev]
         L.circleMarker([spot.lat, spot.lon], {
-            radius: 7, color: '#fff', fillColor: '#ff2200', fillOpacity: 0.9, weight: 1.5,
+            radius: cfg.radius, color: '#fff', fillColor: cfg.color, fillOpacity: 0.9, weight: 1.5,
         })
             .bindPopup(
                 `<div style="font-family:sans-serif;font-size:13px;line-height:1.7;min-width:200px">` +
                 `<b style="font-size:14px">🔥 Очаг возгорания</b><br>` +
+                `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${cfg.color}22;color:${cfg.color};border:1px solid ${cfg.color}55;margin:2px 0">` +
+                `${cfg.label}</span><br>` +
                 `<span style="color:#e05050">📅 Обнаружен:</span> <b>${formatSpotDateTime(spot)}</b><br>` +
                 `🌡️ Яркость: ${spot.brightness} K<br>` +
                 `⚡ FRP: ${spot.frp} МВт<br>` +
@@ -674,12 +679,38 @@ function formatSpotDateTime(spot) {
     })
 }
 
+function getSpotSeverity(spot) {
+    if (spot.severity) return spot.severity
+    if (spot.frp >= 25 || spot.brightness >= 400) return 'high'
+    if (spot.frp >= 8 || spot.brightness >= 340) return 'nominal'
+    return 'low'
+}
+
+const SEVERITY_CONFIG = {
+    low:     { label: 'Слабый',    color: '#facc15', border: '#a16207', radius: 6 },
+    nominal: { label: 'Умеренный', color: '#fb923c', border: '#c2410c', radius: 8 },
+    high:    { label: 'Высокий',   color: '#ef4444', border: '#991b1b', radius: 10 },
+}
+
+function severityLabel(spot) {
+    return SEVERITY_CONFIG[getSpotSeverity(spot)]?.label ?? 'Слабый'
+}
+
+function severityBadgeClass(spot) {
+    const s = getSpotSeverity(spot)
+    if (s === 'high') return 'afs-rp-badge afs-rp-badge--red'
+    if (s === 'nominal') return 'afs-rp-badge afs-rp-badge--orange'
+    return 'afs-rp-badge afs-rp-badge--yellow'
+}
+
 const filteredHotspots = computed(() => {
     if (!hotspots.value.length) return []
     const cutoff = Date.now() - fireHoursFilter.value * 3600 * 1000
     return hotspots.value.filter(spot => {
         const d = spotToDate(spot)
-        return !d || d.getTime() >= cutoff
+        if (d && d.getTime() < cutoff) return false
+        if (fireSeverityFilter.value && getSpotSeverity(spot) !== fireSeverityFilter.value) return false
+        return true
     })
 })
 
@@ -711,6 +742,10 @@ function fireRiskLabel(count) {
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 watch(fireHoursFilter, () => {
+    if (hotspotLayer) renderHotspots(filteredHotspots.value)
+})
+
+watch(fireSeverityFilter, () => {
     if (hotspotLayer) renderHotspots(filteredHotspots.value)
 })
 
@@ -809,17 +844,26 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
             <div v-show="activeTab === 'map'" class="afs-map-panel">
                 <div ref="mapEl" class="afs-map"></div>
 
-                <!-- Fire time filter bar -->
-                <div class="afs-fire-filter-bar">
-                    <span class="afs-filt-label">🔥 Период:</span>
-                    <button class="afs-filt-btn" :class="{ 'afs-filt-btn--active': fireHoursFilter === 12 }" @click="fireHoursFilter = 12">12ч</button>
-                    <button class="afs-filt-btn" :class="{ 'afs-filt-btn--active': fireHoursFilter === 24 }" @click="fireHoursFilter = 24">24ч</button>
-                    <button class="afs-filt-btn" :class="{ 'afs-filt-btn--active': fireHoursFilter === 48 }" @click="fireHoursFilter = 48">48ч</button>
-                    <div class="afs-filt-slider-wrap">
-                        <input class="afs-filt-slider" type="range" min="1" max="48" step="1" v-model.number="fireHoursFilter"
-                            :style="{ '--pct': ((fireHoursFilter - 1) / 47 * 100) + '%' }" />
+                <!-- Fire filter bars -->
+                <div class="afs-fire-filters">
+                    <div class="afs-fire-filter-bar">
+                        <span class="afs-filt-label">🔥 Период:</span>
+                        <button class="afs-filt-btn" :class="{ 'afs-filt-btn--active': fireHoursFilter === 12 }" @click="fireHoursFilter = 12">12ч</button>
+                        <button class="afs-filt-btn" :class="{ 'afs-filt-btn--active': fireHoursFilter === 24 }" @click="fireHoursFilter = 24">24ч</button>
+                        <button class="afs-filt-btn" :class="{ 'afs-filt-btn--active': fireHoursFilter === 48 }" @click="fireHoursFilter = 48">48ч</button>
+                        <div class="afs-filt-slider-wrap">
+                            <input class="afs-filt-slider" type="range" min="1" max="48" step="1" v-model.number="fireHoursFilter"
+                                :style="{ '--pct': ((fireHoursFilter - 1) / 47 * 100) + '%' }" />
+                        </div>
+                        <span class="afs-filt-value">{{ fireHoursFilter }}ч</span>
                     </div>
-                    <span class="afs-filt-value">{{ fireHoursFilter }}ч</span>
+                    <div class="afs-fire-filter-bar afs-fire-filter-bar--severity">
+                        <span class="afs-filt-label">📊 Степень:</span>
+                        <button class="afs-filt-btn afs-filt-btn--all" :class="{ 'afs-filt-btn--active': !fireSeverityFilter }" @click="fireSeverityFilter = null">Все</button>
+                        <button class="afs-filt-btn afs-sev-btn--low" :class="{ 'afs-sev-btn--low-active': fireSeverityFilter === 'low' }" @click="fireSeverityFilter = fireSeverityFilter === 'low' ? null : 'low'">Слабый</button>
+                        <button class="afs-filt-btn afs-sev-btn--nominal" :class="{ 'afs-sev-btn--nominal-active': fireSeverityFilter === 'nominal' }" @click="fireSeverityFilter = fireSeverityFilter === 'nominal' ? null : 'nominal'">Умеренный</button>
+                        <button class="afs-filt-btn afs-sev-btn--high" :class="{ 'afs-sev-btn--high-active': fireSeverityFilter === 'high' }" @click="fireSeverityFilter = fireSeverityFilter === 'high' ? null : 'high'">Высокий</button>
+                    </div>
                 </div>
 
                 <!-- Loading overlay -->
@@ -872,6 +916,17 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                         <div v-else class="afs-rp__fire-block">
                             <span class="afs-rp-badge afs-rp-badge--red">🔥 Обнаружено очагов: {{ filteredHotspots.length }}</span>
                             <span :class="fireBadgeClass(filteredHotspots.length)">{{ fireRiskLabel(filteredHotspots.length) }}</span>
+                            <div class="afs-rp__severity-breakdown">
+                                <span class="afs-rp-badge afs-rp-badge--yellow afs-sev-mini">
+                                    Слабый: {{ filteredHotspots.filter(s => getSpotSeverity(s) === 'low').length }}
+                                </span>
+                                <span class="afs-rp-badge afs-rp-badge--orange afs-sev-mini">
+                                    Умеренный: {{ filteredHotspots.filter(s => getSpotSeverity(s) === 'nominal').length }}
+                                </span>
+                                <span class="afs-rp-badge afs-rp-badge--red afs-sev-mini">
+                                    Высокий: {{ filteredHotspots.filter(s => getSpotSeverity(s) === 'high').length }}
+                                </span>
+                            </div>
                         </div>
                     </div>
 
@@ -903,6 +958,7 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                             <thead>
                                 <tr>
                                     <th>Дата / Время</th>
+                                    <th>Степень</th>
                                     <th>FRP</th>
                                     <th>Спутник</th>
                                 </tr>
@@ -910,6 +966,7 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                             <tbody>
                                 <tr v-for="(h, i) in filteredHotspots.slice(0, 5)" :key="i">
                                     <td>{{ h.acq_date }} {{ formatHotspotTime(h.acq_time) }}</td>
+                                    <td><span :class="severityBadgeClass(h)" class="afs-sev-table-badge">{{ severityLabel(h) }}</span></td>
                                     <td>{{ h.frp }} МВт</td>
                                     <td>{{ h.satellite || '—' }}</td>
                                 </tr>
@@ -1941,13 +1998,21 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 .ai-message-content :deep(ol) { padding-left: 20px; margin: 4px 0; }
 .ai-message-content :deep(li) { margin: 2px 0; }
 
-/* ── Fire filter bar ──────────────────────────────────────────────────────── */
-.afs-fire-filter-bar {
+/* ── Fire filters container ───────────────────────────────────────────────── */
+.afs-fire-filters {
     position: absolute;
     top: 10px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+/* ── Fire filter bar ──────────────────────────────────────────────────────── */
+.afs-fire-filter-bar {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -2036,6 +2101,41 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
     font-weight: 700;
     min-width: 28px;
     text-align: right;
+}
+
+/* ── Severity filter buttons ──────────────────────────────────────────────── */
+.afs-sev-btn--low-active {
+    background: rgba(250, 204, 21, 0.18) !important;
+    border-color: #facc15 !important;
+    color: #facc15 !important;
+}
+.afs-sev-btn--nominal-active {
+    background: rgba(251, 146, 60, 0.18) !important;
+    border-color: #fb923c !important;
+    color: #fb923c !important;
+}
+.afs-sev-btn--high-active {
+    background: rgba(239, 68, 68, 0.18) !important;
+    border-color: #ef4444 !important;
+    color: #ef4444 !important;
+}
+
+.afs-rp__severity-breakdown {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    width: 100%;
+    margin-top: 6px;
+}
+
+.afs-sev-mini {
+    font-size: 10px !important;
+    padding: 2px 7px !important;
+}
+
+.afs-sev-table-badge {
+    font-size: 10px !important;
+    padding: 1px 6px !important;
 }
 
 .afs-summary-bar__filtered {
@@ -2323,4 +2423,7 @@ html[data-theme="light"] .afs-filt-label      { color: #6b8570; }
 html[data-theme="light"] .afs-filt-btn        { background: #f4f7f4; border-color: #c4ddc8; color: #6b8570; }
 html[data-theme="light"] .afs-filt-btn:hover  { background: #e6f4ea; color: #1a2e1d; }
 html[data-theme="light"] .afs-filt-btn--active { background: rgba(220,38,38,0.10); border-color: #dc2626; color: #dc2626; }
+html[data-theme="light"] .afs-sev-btn--low-active     { background: rgba(202,138,4,0.12) !important; border-color: #a16207 !important; color: #a16207 !important; }
+html[data-theme="light"] .afs-sev-btn--nominal-active  { background: rgba(234,88,12,0.12) !important; border-color: #c2410c !important; color: #c2410c !important; }
+html[data-theme="light"] .afs-sev-btn--high-active     { background: rgba(220,38,38,0.12) !important; border-color: #dc2626 !important; color: #dc2626 !important; }
 </style>

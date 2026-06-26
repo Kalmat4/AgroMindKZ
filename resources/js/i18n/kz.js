@@ -14,6 +14,8 @@ export default {
     degradation: 'Деградация', water: 'Су стрессі', co2: 'CO₂',
     ask_ai: 'ИИ Агрономнан сұрау →',
     risk_moderate: 'ОРТАША', risk_high: 'ЖОҒАРЫ', risk_critical: 'КРИТИКАЛЫҚ',
+    severity_all: 'Барлығы', severity_low: 'Әлсіз', severity_nominal: 'Орташа', severity_high: 'Жоғары',
+    severity_label: 'Дәреже',
     no_fires_badge: 'Белсенді өрт жоқ',
     loading: 'NASA FIRMS деректері жүктелуде...',
     hotspots_table: 'Соңғы ошақтар',
