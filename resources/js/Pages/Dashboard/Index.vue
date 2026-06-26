@@ -1,7 +1,7 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import axios from 'axios'
 import MarkdownIt from 'markdown-it'
 import { useI18n } from 'vue-i18n'
@@ -97,6 +97,7 @@ const REGIONS = {
 const mapEl = ref(null)
 const selectedOblast = ref(null)
 const hotspots = ref([])
+const fireHoursFilter = ref(48)
 const loading = ref(false)
 const errorMsg = ref(null)
 const activeTab = ref('map')
@@ -548,7 +549,7 @@ async function saveAndFetch(oblast) {
             bbox_north: oblast.north,
         })
         hotspots.value = data.hotspots
-        renderHotspots(data.hotspots)
+        renderHotspots(filteredHotspots.value)
     } catch {
         errorMsg.value = 'Ошибка получения данных о пожарах.'
     } finally {
@@ -564,7 +565,7 @@ async function restoreSelection(oblast) {
     try {
         const { data } = await axios.get('/zone/fires')
         hotspots.value = data.hotspots
-        renderHotspots(data.hotspots)
+        renderHotspots(filteredHotspots.value)
     } catch { /* silent */ } finally {
         loading.value = false
     }
@@ -578,11 +579,15 @@ function renderHotspots(spots) {
             radius: 7, color: '#fff', fillColor: '#ff2200', fillOpacity: 0.9, weight: 1.5,
         })
             .bindPopup(
-                `<b>🔥 Очаг возгорания</b><br>` +
-                `Яркость: ${spot.brightness} K<br>` +
-                `FRP: ${spot.frp} МВт<br>` +
-                `Уверенность: ${spot.confidence}<br>` +
-                `Период: ${spot.daynight === 'D' ? 'День' : 'Ночь'}`
+                `<div style="font-family:sans-serif;font-size:13px;line-height:1.7;min-width:200px">` +
+                `<b style="font-size:14px">🔥 Очаг возгорания</b><br>` +
+                `<span style="color:#e05050">📅 Обнаружен:</span> <b>${formatSpotDateTime(spot)}</b><br>` +
+                `🌡️ Яркость: ${spot.brightness} K<br>` +
+                `⚡ FRP: ${spot.frp} МВт<br>` +
+                `🎯 Уверенность: ${spot.confidence}<br>` +
+                `🛰️ Спутник: ${spot.satellite || '—'}<br>` +
+                `🌗 Период: ${spot.daynight === 'D' ? 'День' : 'Ночь'}` +
+                `</div>`
             )
             .addTo(hotspotLayer)
     })
@@ -633,8 +638,33 @@ function openAiWithContext() {
 function formatHotspotTime(t) {
     if (!t) return '—'
     const s = String(t).padStart(4, '0')
-    return s.slice(0, 2) + ':' + s.slice(2)
+    return s.slice(0, 2) + ':' + s.slice(2) + ' UTC'
 }
+
+function spotToDate(spot) {
+    if (!spot.acq_date || spot.acq_time === undefined) return null
+    const s = String(spot.acq_time).padStart(4, '0')
+    return new Date(`${spot.acq_date}T${s.slice(0, 2)}:${s.slice(2)}:00Z`)
+}
+
+function formatSpotDateTime(spot) {
+    const d = spotToDate(spot)
+    if (!d) return '—'
+    return d.toLocaleString('ru', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+        timeZone: 'UTC', timeZoneName: 'short',
+    })
+}
+
+const filteredHotspots = computed(() => {
+    if (!hotspots.value.length) return []
+    const cutoff = Date.now() - fireHoursFilter.value * 3600 * 1000
+    return hotspots.value.filter(spot => {
+        const d = spotToDate(spot)
+        return !d || d.getTime() >= cutoff
+    })
+})
 
 function degradationClass(v) {
     if (v > 4)    return 'afs-rp__val--red'
@@ -663,6 +693,10 @@ function fireRiskLabel(count) {
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
+watch(fireHoursFilter, () => {
+    if (hotspotLayer) renderHotspots(filteredHotspots.value)
+})
+
 onBeforeUnmount(() => { map?.remove(); closeCamera() })
 
 </script>
@@ -708,7 +742,7 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                 <div v-else class="afs-sidebar__header afs-sidebar__header--detail">
                     <button class="afs-back-btn" @click="backToOblasts" title="Назад">←</button>
                     <span class="afs-sidebar__title afs-sidebar__title--detail">{{ selectedOblast?.name }}</span>
-                    <span v-if="hotspots.length" class="afs-fire-badge">🔥 {{ hotspots.length }}</span>
+                    <span v-if="filteredHotspots.length" class="afs-fire-badge">🔥 {{ filteredHotspots.length }}</span>
                 </div>
 
                 <!-- Country list -->
@@ -747,8 +781,8 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                         :class="{ 'afs-oblast-item--active': selectedCity?.name === city.name }"
                         @click="selectCity(city)">
                         <span class="afs-oblast-item__name">📍 {{ city.name }}</span>
-                        <span v-if="selectedCity?.name === city.name && hotspots.length"
-                            class="afs-oblast-item__count">{{ hotspots.length }}</span>
+                        <span v-if="selectedCity?.name === city.name && filteredHotspots.length"
+                            class="afs-oblast-item__count">{{ filteredHotspots.length }}</span>
                     </li>
                 </ul>
 
@@ -757,6 +791,19 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
             <!-- Map panel -->
             <div v-show="activeTab === 'map'" class="afs-map-panel">
                 <div ref="mapEl" class="afs-map"></div>
+
+                <!-- Fire time filter bar -->
+                <div class="afs-fire-filter-bar">
+                    <span class="afs-filt-label">🔥 Период:</span>
+                    <button class="afs-filt-btn" :class="{ 'afs-filt-btn--active': fireHoursFilter === 12 }" @click="fireHoursFilter = 12">12ч</button>
+                    <button class="afs-filt-btn" :class="{ 'afs-filt-btn--active': fireHoursFilter === 24 }" @click="fireHoursFilter = 24">24ч</button>
+                    <button class="afs-filt-btn" :class="{ 'afs-filt-btn--active': fireHoursFilter === 48 }" @click="fireHoursFilter = 48">48ч</button>
+                    <div class="afs-filt-slider-wrap">
+                        <input class="afs-filt-slider" type="range" min="1" max="48" step="1" v-model.number="fireHoursFilter"
+                            :style="{ '--pct': ((fireHoursFilter - 1) / 47 * 100) + '%' }" />
+                    </div>
+                    <span class="afs-filt-value">{{ fireHoursFilter }}ч</span>
+                </div>
 
                 <!-- Loading overlay -->
                 <div v-if="loading" class="afs-map-loading">
@@ -773,8 +820,11 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                     <span class="afs-summary-bar__oblast">{{ selectedOblast.name }}</span>
                     <span v-if="selectedCity" class="afs-summary-bar__arrow">›</span>
                     <span v-if="selectedCity" class="afs-summary-bar__city">{{ selectedCity.name }}</span>
-                    <span v-if="hotspots.length" class="afs-summary-bar__count">
-                        Обнаружено очагов: <strong>{{ hotspots.length }}</strong>
+                    <span v-if="filteredHotspots.length" class="afs-summary-bar__count">
+                        Обнаружено очагов: <strong>{{ filteredHotspots.length }}</strong>
+                        <span v-if="hotspots.length > filteredHotspots.length" class="afs-summary-bar__filtered">
+                            (из {{ hotspots.length }} за 48ч)
+                        </span>
                     </span>
                     <span v-else class="afs-summary-bar__none">
                         Активных пожаров не обнаружено
@@ -796,15 +846,15 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 
                     <!-- Fire status -->
                     <div class="afs-rp__section">
-                        <div v-if="hotspots.length === 0" class="afs-rp__fire-block">
+                        <div v-if="filteredHotspots.length === 0" class="afs-rp__fire-block">
                             <span class="afs-rp-badge afs-rp-badge--green">✅ Активных пожаров нет</span>
                             <p class="afs-rp__update-text">
                                 Последнее обновление: сегодня, 4 раза в сутки (NASA FIRMS)
                             </p>
                         </div>
                         <div v-else class="afs-rp__fire-block">
-                            <span class="afs-rp-badge afs-rp-badge--red">🔥 Обнаружено очагов: {{ hotspots.length }}</span>
-                            <span :class="fireBadgeClass(hotspots.length)">{{ fireRiskLabel(hotspots.length) }}</span>
+                            <span class="afs-rp-badge afs-rp-badge--red">🔥 Обнаружено очагов: {{ filteredHotspots.length }}</span>
+                            <span :class="fireBadgeClass(filteredHotspots.length)">{{ fireRiskLabel(filteredHotspots.length) }}</span>
                         </div>
                     </div>
 
@@ -830,23 +880,21 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                     </div>
 
                     <!-- Last hotspots table -->
-                    <div v-if="hotspots.length > 0" class="afs-rp__section">
+                    <div v-if="filteredHotspots.length > 0" class="afs-rp__section">
                         <div class="afs-rp__section-title">Последние очаги</div>
                         <table class="afs-rp__table">
                             <thead>
                                 <tr>
-                                    <th>Время</th>
-                                    <th>Яркость</th>
+                                    <th>Дата / Время</th>
                                     <th>FRP</th>
                                     <th>Спутник</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="(h, i) in hotspots.slice(0, 3)" :key="i">
-                                    <td>{{ formatHotspotTime(h.acq_time) }}</td>
-                                    <td>{{ h.brightness }} K</td>
+                                <tr v-for="(h, i) in filteredHotspots.slice(0, 5)" :key="i">
+                                    <td>{{ h.acq_date }} {{ formatHotspotTime(h.acq_time) }}</td>
                                     <td>{{ h.frp }} МВт</td>
-                                    <td>{{ h.satellite }}</td>
+                                    <td>{{ h.satellite || '—' }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1876,6 +1924,109 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 .ai-message-content :deep(ol) { padding-left: 20px; margin: 4px 0; }
 .ai-message-content :deep(li) { margin: 2px 0; }
 
+/* ── Fire filter bar ──────────────────────────────────────────────────────── */
+.afs-fire-filter-bar {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(18, 18, 18, 0.92);
+    border: 1px solid #2d2d2d;
+    border-radius: 28px;
+    padding: 6px 14px;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
+    white-space: nowrap;
+}
+
+.afs-filt-label {
+    color: #888;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    margin-right: 2px;
+}
+
+.afs-filt-btn {
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #1e1e1e;
+    border: 1px solid #3a3a3a;
+    color: #888;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.afs-filt-btn:hover {
+    background: #2a2a2a;
+    color: #e0d6cc;
+    border-color: #555;
+}
+
+.afs-filt-btn--active {
+    background: rgba(220, 38, 38, 0.18);
+    border-color: #dc2626;
+    color: #f87171;
+}
+
+.afs-filt-slider-wrap {
+    width: 110px;
+    display: flex;
+    align-items: center;
+    padding: 0 4px;
+}
+
+.afs-filt-slider {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right, #dc2626 0%, #dc2626 calc(var(--pct, 100%) * 1%), #3a3a3a calc(var(--pct, 100%) * 1%), #3a3a3a 100%);
+    outline: none;
+    cursor: pointer;
+}
+
+.afs-filt-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #f87171;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    cursor: pointer;
+}
+
+.afs-filt-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #f87171;
+    border: 2px solid #fff;
+    cursor: pointer;
+}
+
+.afs-filt-value {
+    color: #f87171;
+    font-size: 12px;
+    font-weight: 700;
+    min-width: 28px;
+    text-align: right;
+}
+
+.afs-summary-bar__filtered {
+    color: #555;
+    font-size: 11px;
+    font-weight: 400;
+}
+
 /* ── Region info panel ────────────────────────────────────────────────────── */
 .afs-region-panel {
     position: absolute;
@@ -2149,4 +2300,10 @@ html[data-theme="light"] .ai-message-content :deep(th) { background: #e6f4ea; co
 html[data-theme="light"] .ai-message-content :deep(tr:nth-child(even)) { background: #f4f7f4; }
 html[data-theme="light"] .ai-message-content :deep(strong) { color: #007a3a; }
 html[data-theme="light"] .ai-message-content :deep(hr)     { border-color: #c4ddc8; }
+
+html[data-theme="light"] .afs-fire-filter-bar { background: rgba(255,255,255,0.94); border-color: #c4ddc8; box-shadow: 0 2px 16px rgba(0,0,0,0.10); }
+html[data-theme="light"] .afs-filt-label      { color: #6b8570; }
+html[data-theme="light"] .afs-filt-btn        { background: #f4f7f4; border-color: #c4ddc8; color: #6b8570; }
+html[data-theme="light"] .afs-filt-btn:hover  { background: #e6f4ea; color: #1a2e1d; }
+html[data-theme="light"] .afs-filt-btn--active { background: rgba(220,38,38,0.10); border-color: #dc2626; color: #dc2626; }
 </style>
