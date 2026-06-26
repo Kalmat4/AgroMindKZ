@@ -5,7 +5,8 @@
       "Bash(php artisan *)",
       "WebFetch(domain:geodata.ucdavis.edu)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(Select-String *)"
+      "Bash(Select-String *)",
+      "Bash(grep -E '\\\\.\\(blade\\\\.php|js|vue|ts\\)$')"
     ]
   }
 }

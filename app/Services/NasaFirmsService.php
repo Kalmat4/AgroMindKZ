@@ -65,6 +65,9 @@ class NasaFirmsService
                 'confidence' => $row['confidence'] ?? '',
                 'frp'        => (float) ($row['frp'] ?? 0),
                 'daynight'   => $row['daynight'] ?? '',
+                'acq_date'   => $row['acq_date'] ?? '',
+                'acq_time'   => $row['acq_time'] ?? '',
+                'satellite'  => $row['satellite'] ?? '',
             ];
         }
 
