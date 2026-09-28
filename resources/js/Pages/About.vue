@@ -48,7 +48,7 @@ import { Head, Link } from '@inertiajs/vue3'
                         <div class="about-feature-card__icon">🔥</div>
                         <div class="about-feature-card__title">Мониторинг пожаров</div>
                         <div class="about-feature-card__text">
-                            Спутники VIIRS/MODIS, обновление каждые 6 часов
+                            Спутник VIIRS (Suomi NPP), очаги за последние 48 часов
                         </div>
                     </div>
                     <div class="about-feature-card">
@@ -59,10 +59,10 @@ import { Head, Link } from '@inertiajs/vue3'
                         </div>
                     </div>
                     <div class="about-feature-card">
-                        <div class="about-feature-card__icon">📊</div>
-                        <div class="about-feature-card__title">Прозрачность АПК</div>
+                        <div class="about-feature-card__icon">⛈️</div>
+                        <div class="about-feature-card__title">Прогноз угроз урожаю</div>
                         <div class="about-feature-card__text">
-                            Мониторинг субсидий, аномалии урожайности
+                            Ливни, град, ветер, засуха и заморозки на 5 дней по каждой области
                         </div>
                     </div>
                 </div>
@@ -78,7 +78,7 @@ import { Head, Link } from '@inertiajs/vue3'
                     <span class="about-tech-tag">Vue.js 3</span>
                     <span class="about-tech-tag">n8n</span>
                     <span class="about-tech-tag">NASA FIRMS API</span>
-                    <span class="about-tech-tag">Claude Haiku AI</span>
+                    <span class="about-tech-tag">Claude AI (Anthropic)</span>
                     <span class="about-tech-tag">MySQL 8</span>
                 </div>
             </div>

@@ -34,7 +34,7 @@ class ForecastController extends Controller
             $data['bbox_north'],
         );
 
-        $fireCount = count($hotspots);
+        $fireCount = count($hotspots ?? []);
         if ($fireCount > 0 && $forecast) {
             $fireSeverity = $fireCount >= 10 ? 'high' : ($fireCount >= 4 ? 'nominal' : 'low');
             $forecast['risks'][] = [
@@ -51,6 +51,7 @@ class ForecastController extends Controller
         return response()->json([
             'forecast'   => $forecast,
             'fire_count' => $fireCount,
+            'firms_ok'   => $hotspots !== null,
         ]);
     }
 

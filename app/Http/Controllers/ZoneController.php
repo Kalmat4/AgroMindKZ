@@ -26,15 +26,9 @@ class ZoneController extends Controller
             $data
         );
 
-        return response()->json([
-            'zone'     => $zone,
-            'hotspots' => $this->firms->getHotspots(
-                $zone->bbox_west,
-                $zone->bbox_south,
-                $zone->bbox_east,
-                $zone->bbox_north,
-            ),
-        ]);
+        return response()->json(['zone' => $zone] + $this->hotspotsFor(
+            $zone->bbox_west, $zone->bbox_south, $zone->bbox_east, $zone->bbox_north,
+        ));
     }
 
     public function getFires(): JsonResponse
@@ -42,18 +36,12 @@ class ZoneController extends Controller
         $zone = auth()->user()->zone;
 
         if (! $zone) {
-            return response()->json(['hotspots' => [], 'zone' => null]);
+            return response()->json(['hotspots' => [], 'firms_ok' => true, 'zone' => null]);
         }
 
-        return response()->json([
-            'zone'     => $zone,
-            'hotspots' => $this->firms->getHotspots(
-                $zone->bbox_west,
-                $zone->bbox_south,
-                $zone->bbox_east,
-                $zone->bbox_north,
-            ),
-        ]);
+        return response()->json(['zone' => $zone] + $this->hotspotsFor(
+            $zone->bbox_west, $zone->bbox_south, $zone->bbox_east, $zone->bbox_north,
+        ));
     }
 
     public function hotspots(Request $request): JsonResponse
@@ -65,13 +53,19 @@ class ZoneController extends Controller
             'bbox_north' => ['required', 'numeric', 'between:-90,90'],
         ]);
 
-        return response()->json([
-            'hotspots' => $this->firms->getHotspots(
-                $data['bbox_west'],
-                $data['bbox_south'],
-                $data['bbox_east'],
-                $data['bbox_north'],
-            ),
-        ]);
+        return response()->json($this->hotspotsFor(
+            $data['bbox_west'], $data['bbox_south'], $data['bbox_east'], $data['bbox_north'],
+        ));
+    }
+
+    /** firms_ok=false — спутниковые данные не получены, фронтенд не должен показывать «пожаров нет». */
+    private function hotspotsFor(float $west, float $south, float $east, float $north): array
+    {
+        $hotspots = $this->firms->getHotspots($west, $south, $east, $north);
+
+        return [
+            'hotspots' => $hotspots ?? [],
+            'firms_ok' => $hotspots !== null,
+        ];
     }
 }

@@ -2,31 +2,43 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class OpenWeatherMapService
 {
-    private const API_KEY = 'e093f5ca5696fdcd3312a671112b801e';
+    private const CACHE_TTL = 1800; // прогноз 5 дней по 3 часа, чаще обновлять смысла нет
 
     public function getForecast(float $lat, float $lon): ?array
     {
-        $url = sprintf(
-            'https://api.openweathermap.org/data/2.5/forecast?lat=%s&lon=%s&appid=%s&units=metric&lang=ru',
-            $lat,
-            $lon,
-            self::API_KEY
-        );
+        $lat      = round($lat, 2);
+        $lon      = round($lon, 2);
+        $cacheKey = "owm:forecast:{$lat},{$lon}";
+
+        $cached = Cache::get($cacheKey);
+        if ($cached !== null) {
+            return $cached;
+        }
 
         try {
-            $response = Http::timeout(10)->get($url);
+            $response = Http::timeout(10)->get('https://api.openweathermap.org/data/2.5/forecast', [
+                'lat'   => $lat,
+                'lon'   => $lon,
+                'appid' => config('services.openweather.key'),
+                'units' => 'metric',
+                'lang'  => 'ru',
+            ]);
 
             if (! $response->successful()) {
                 Log::warning('OpenWeatherMap non-200', ['status' => $response->status()]);
                 return null;
             }
 
-            return $this->analyze($response->json());
+            $result = $this->analyze($response->json());
+            Cache::put($cacheKey, $result, self::CACHE_TTL);
+
+            return $result;
         } catch (\Throwable $e) {
             Log::error('OpenWeatherMap request failed', ['message' => $e->getMessage()]);
             return null;

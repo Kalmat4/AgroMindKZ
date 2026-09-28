@@ -21,7 +21,6 @@ L.Icon.Default.mergeOptions({
 
 const props = defineProps({
     currentZone: { type: Object, default: null },
-    sessionId: { type: String, default: '' },
 })
 
 // ── Central Asia data ─────────────────────────────────────────────────────────
@@ -328,7 +327,6 @@ async function sendCrop() {
     const text = cropInput.value.trim()
     const img = cropImage.value
     const media = cropMediaType.value
-    const fname = cropFileName.value
     if (!text && !img) return
 
     cropMessages.value.push({ role: 'user', text, preview: cropPreview.value })
@@ -343,8 +341,14 @@ async function sendCrop() {
             message: text,
             image: img,
             mediaType: media,
-            fileName: fname,
             sessionId: currentSessionId.value,
+            region: selectedOblast.value ? {
+                name: selectedOblast.value.name,
+                west: selectedOblast.value.west,
+                south: selectedOblast.value.south,
+                east: selectedOblast.value.east,
+                north: selectedOblast.value.north,
+            } : null,
         })
 
         if (data.sessionId && data.sessionId !== currentSessionId.value) {
@@ -355,8 +359,8 @@ async function sendCrop() {
         }
 
         cropMessages.value.push({ role: 'ai', text: data.response ?? data, preview: null })
-    } catch {
-        cropMessages.value.push({ role: 'ai', text: t('home.chat_error'), preview: null })
+    } catch (e) {
+        cropMessages.value.push({ role: 'ai', text: e.response?.data?.error || t('home.chat_error'), preview: null })
     } finally {
         cropLoading.value = false
         await nextTick()
@@ -680,6 +684,9 @@ async function fetchFires(oblast) {
             bbox_north: oblast.north,
         })
         hotspots.value = data.hotspots
+        if (data.firms_ok === false) {
+            errorMsg.value = 'Спутниковые данные NASA FIRMS сейчас недоступны — пожары не показаны. Повторите позже.'
+        }
         renderHotspots(filteredHotspots.value)
     } catch {
         errorMsg.value = 'Ошибка получения данных о пожарах.'
@@ -735,6 +742,9 @@ async function restoreSelection(oblast) {
     try {
         const { data } = await axios.get('/zone/fires')
         hotspots.value = data.hotspots
+        if (data.firms_ok === false) {
+            errorMsg.value = 'Спутниковые данные NASA FIRMS сейчас недоступны — пожары не показаны. Повторите позже.'
+        }
         renderHotspots(filteredHotspots.value)
     } catch { /* silent */ } finally {
         loading.value = false
@@ -795,36 +805,9 @@ function renderHotspots(spots) {
     }
 }
 
-// ── Region Eco Stub Data ──────────────────────────────────────────────────────
-const REGION_ECO = {
-    'Костанайская':          { degradation: 3.2, water: 'высокий',     co2: 45 },
-    'Акмолинская':           { degradation: 2.8, water: 'средний',     co2: 38 },
-    'Павлодарская':          { degradation: 4.1, water: 'высокий',     co2: 52 },
-    'Карагандинская':        { degradation: 3.7, water: 'критический', co2: 61 },
-    'Северо-Казахстанская':  { degradation: 2.1, water: 'низкий',      co2: 28 },
-    'Западно-Казахстанская': { degradation: 3.9, water: 'высокий',     co2: 44 },
-    'Атырауская':            { degradation: 4.5, water: 'критический', co2: 38 },
-    'Мангыстауская':         { degradation: 4.8, water: 'критический', co2: 29 },
-    'Актюбинская':           { degradation: 3.4, water: 'высокий',     co2: 41 },
-    'Жамбылская':            { degradation: 3.1, water: 'средний',     co2: 33 },
-    'Туркестанская':         { degradation: 3.6, water: 'высокий',     co2: 37 },
-    'Алматинская':           { degradation: 2.9, water: 'средний',     co2: 31 },
-    'Кызылординская':        { degradation: 4.3, water: 'критический', co2: 48 },
-    'Восточно-Казахстанская':{ degradation: 2.4, water: 'низкий',      co2: 22 },
-    'г. Алматы':             { degradation: 1.8, water: 'низкий',      co2: 15 },
-    'г. Астана':             { degradation: 1.5, water: 'низкий',      co2: 12 },
-    'Улытауская':            { degradation: 3.8, water: 'высокий',     co2: 43 },
-}
-
-const regionEco = computed(() =>
-    selectedOblast.value
-        ? (REGION_ECO[selectedOblast.value.name] ?? { degradation: 3.0, water: 'средний', co2: 35 })
-        : { degradation: 3.0, water: 'средний', co2: 35 }
-)
-
 function openAiWithContext() {
     switchTab('crop')
-    cropInput.value = `Расскажи про экологическую ситуацию и пожарные риски в ${selectedOblast.value.name}`
+    cropInput.value = `Оцени риск пожаров и угрозы урожаю в регионе «${selectedOblast.value.name}» на ближайшие дни. Что делать фермеру прямо сейчас?`
     nextTick(() => scrollCropToBottom())
 }
 
@@ -884,20 +867,6 @@ const filteredHotspots = computed(() => {
         return true
     })
 })
-
-function degradationClass(v) {
-    if (v > 4)    return 'afs-rp__val--red'
-    if (v > 3)    return 'afs-rp__val--orange'
-    if (v <= 2.5) return 'afs-rp__val--green'
-    return ''
-}
-
-function waterBadgeClass(w) {
-    if (w === 'критический') return 'afs-rp-badge afs-rp-badge--red'
-    if (w === 'высокий')     return 'afs-rp-badge afs-rp-badge--orange'
-    if (w === 'средний')     return 'afs-rp-badge afs-rp-badge--yellow'
-    return 'afs-rp-badge afs-rp-badge--green'
-}
 
 function fireBadgeClass(count) {
     if (count >= 10) return 'afs-rp-badge afs-rp-badge--red'
@@ -1166,7 +1135,10 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 
                     <!-- Fire status -->
                     <div class="afs-rp__section">
-                        <div v-if="filteredHotspots.length === 0" class="afs-rp__fire-block">
+                        <div v-if="errorMsg" class="afs-rp__fire-block">
+                            <span class="afs-rp-badge afs-rp-badge--yellow">⚠️ Нет данных со спутника</span>
+                        </div>
+                        <div v-else-if="filteredHotspots.length === 0" class="afs-rp__fire-block">
                             <span class="afs-rp-badge afs-rp-badge--green">✅ Активных пожаров нет</span>
                             <p class="afs-rp__update-text">
                                 Последнее обновление: сегодня, 4 раза в сутки (NASA FIRMS)
@@ -1185,27 +1157,6 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                                 <span class="afs-rp-badge afs-rp-badge--red afs-sev-mini">
                                     Высокий: {{ filteredHotspots.filter(s => getSpotSeverity(s) === 'high').length }}
                                 </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Eco metrics -->
-                    <div class="afs-rp__section">
-                        <div class="afs-rp__section-title">Экология региона</div>
-                        <div class="afs-rp__eco-row">
-                            <div class="afs-rp__eco-card">
-                                <div class="afs-rp__eco-label">🌱 Деградация</div>
-                                <div class="afs-rp__eco-value" :class="degradationClass(regionEco.degradation)">
-                                    {{ regionEco.degradation }}
-                                </div>
-                            </div>
-                            <div class="afs-rp__eco-card">
-                                <div class="afs-rp__eco-label">💧 Вод. стресс</div>
-                                <span :class="waterBadgeClass(regionEco.water)">{{ regionEco.water }}</span>
-                            </div>
-                            <div class="afs-rp__eco-card">
-                                <div class="afs-rp__eco-label">☁️ CO₂</div>
-                                <div class="afs-rp__eco-value">{{ regionEco.co2 }} Кт</div>
                             </div>
                         </div>
                     </div>

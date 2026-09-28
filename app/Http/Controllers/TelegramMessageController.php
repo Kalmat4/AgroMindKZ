@@ -15,7 +15,7 @@ class TelegramMessageController extends Controller
         $token = config('services.telegram.token');
 
         try {
-            $response = Http::timeout(10)->withoutVerifying()->get("https://api.telegram.org/bot{$token}/sendMessage", [
+            $response = Http::timeout(10)->get("https://api.telegram.org/bot{$token}/sendMessage", [
                 'chat_id'    => $chatID,
                 'text'       => $message,
                 'parse_mode' => 'HTML',

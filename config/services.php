@@ -39,6 +39,18 @@ return [
         'token' => env('TG_TOKEN', ''),
         'almat' => env('ALMAT_CHAT_ID', 0),
         'beka' => env('BEKA_CHAT_ID', 0)
-    ]
+    ],
+
+    'firms' => [
+        'key' => env('FIRMS_MAP_KEY'),
+    ],
+
+    'openweather' => [
+        'key' => env('OPENWEATHER_API_KEY'),
+    ],
+
+    'n8n' => [
+        'crop_webhook' => env('N8N_CROP_WEBHOOK_URL'),
+    ],
 
 ];

@@ -2,21 +2,32 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class NasaFirmsService
 {
-    private const MAP_KEY = 'd445b78e682ba7959cbf75bd1c3dbc8d';
-    private const SOURCE  = 'VIIRS_SNPP_NRT';
-    private const DAYS    = 2;
+    private const SOURCE    = 'VIIRS_SNPP_NRT';
+    private const DAYS      = 2;
+    private const CACHE_TTL = 600; // FIRMS обновляется несколько раз в сутки, 10 минут хватает
 
-    public function getHotspots(float $west, float $south, float $east, float $north): array
+    /**
+     * Очаги за 48 часов в bbox. null — FIRMS не ответил (это не то же самое, что «очагов нет»).
+     */
+    public function getHotspots(float $west, float $south, float $east, float $north): ?array
     {
-        $area = implode(',', [$west, $south, $east, $north]);
-        $url  = sprintf(
+        $area     = implode(',', [$west, $south, $east, $north]);
+        $cacheKey = 'firms:' . self::SOURCE . ':' . $area;
+
+        $cached = Cache::get($cacheKey);
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $url = sprintf(
             'https://firms.modaps.eosdis.nasa.gov/api/area/csv/%s/%s/%s/%d/',
-            self::MAP_KEY,
+            config('services.firms.key'),
             self::SOURCE,
             $area,
             self::DAYS
@@ -27,13 +38,23 @@ class NasaFirmsService
 
             if (! $response->successful()) {
                 Log::warning('NASA FIRMS non-200', ['status' => $response->status()]);
-                return [];
+                return null;
             }
 
-            return $this->parseCsv($response->body());
+            $body = $response->body();
+            // При неверном ключе или превышении лимита FIRMS отвечает 200 с текстом ошибки вместо CSV
+            if (! str_starts_with(ltrim($body), 'latitude')) {
+                Log::warning('NASA FIRMS unexpected body', ['body' => mb_substr($body, 0, 200)]);
+                return null;
+            }
+
+            $hotspots = $this->parseCsv($body);
+            Cache::put($cacheKey, $hotspots, self::CACHE_TTL);
+
+            return $hotspots;
         } catch (\Throwable $e) {
             Log::error('NASA FIRMS request failed', ['message' => $e->getMessage()]);
-            return [];
+            return null;
         }
     }
 

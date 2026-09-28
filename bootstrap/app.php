@@ -22,15 +22,17 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions) {
 
-        // // Эти ошибки НЕ отправляем
-        // $exceptions->dontReport([
-        //     \Illuminate\Auth\AuthenticationException::class,
-        //     \Illuminate\Auth\Access\AuthorizationException::class,
-        //     \Illuminate\Database\Eloquent\ModelNotFoundException::class,
-        //     \Illuminate\Validation\ValidationException::class,
-        //     \Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class,
-        //     \Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException::class,
-        // ]);
+        // Эти ошибки НЕ отправляем
+        $exceptions->dontReport([
+            \Illuminate\Auth\AuthenticationException::class,
+            \Illuminate\Auth\Access\AuthorizationException::class,
+            \Illuminate\Database\Eloquent\ModelNotFoundException::class,
+            \Illuminate\Validation\ValidationException::class,
+            \Illuminate\Session\TokenMismatchException::class,
+            \Illuminate\Http\Exceptions\ThrottleRequestsException::class,
+            \Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class,
+            \Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException::class,
+        ]);
 
         $exceptions->report(function (Throwable $e) {
 
