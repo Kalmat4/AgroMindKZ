@@ -1,6 +1,7 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import AgronomistField from '@/Components/AgronomistField.vue'
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import axios from 'axios'
 import MarkdownIt from 'markdown-it'
@@ -228,6 +229,7 @@ const selectedForecast = computed(() => {
 })
 
 // ── Crop Chat ─────────────────────────────────────────────────────────────────
+const cropField = ref(null)
 const cropMessages = ref([])
 const cropInput = ref('')
 const cropImage = ref(null)
@@ -254,7 +256,7 @@ async function fetchSessions() {
 }
 
 async function loadSession(id) {
-    if (currentSessionId.value === id) return
+    if (cropLoading.value || currentSessionId.value === id) return
     currentSessionId.value = id
     cropMessages.value = []
     clearCropImage()
@@ -262,6 +264,7 @@ async function loadSession(id) {
     try {
         const { data } = await axios.get(`/crop/sessions/${id}`)
         cropMessages.value = data.messages
+        cropField.value = data.session.field_context ?? null
         await nextTick()
         scrollCropToBottom()
     } finally {
@@ -270,6 +273,8 @@ async function loadSession(id) {
 }
 
 function startNewChat() {
+    if (cropLoading.value) return
+    cropField.value = null
     currentSessionId.value = null
     cropMessages.value = []
     cropInput.value = ''
@@ -278,6 +283,7 @@ function startNewChat() {
 
 async function deleteCropSession(id, e) {
     e.stopPropagation()
+    if (cropLoading.value) return
     if (!confirm('Удалить этот чат?')) return
     await axios.delete(`/crop/sessions/${id}`)
     cropSessions.value = cropSessions.value.filter(s => s.id !== id)
@@ -327,7 +333,8 @@ async function sendCrop() {
     const text = cropInput.value.trim()
     const img = cropImage.value
     const media = cropMediaType.value
-    if (!text && !img) return
+    if (cropLoading.value || (!text && !img)) return
+    cropLoading.value = true
 
     cropMessages.value.push({ role: 'user', text, preview: cropPreview.value })
     cropInput.value = ''
@@ -339,6 +346,7 @@ async function sendCrop() {
     try {
         const { data } = await axios.post('/n8n/crop', {
             message: text,
+            field: cropField.value,
             image: img,
             mediaType: media,
             sessionId: currentSessionId.value,
@@ -1233,6 +1241,7 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 
                 <!-- Main chat area -->
                 <div class="afs-crop-main">
+                    <AgronomistField v-model="cropField" :disabled="cropLoading" />
 
                     <!-- Messages -->
                     <div ref="cropScrollEl" class="afs-crop-messages">
@@ -1241,7 +1250,7 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                             <div class="afs-crop-empty__title">ИИ Помощник агроному</div>
                             <div class="afs-crop-empty__hint">
                                 Загрузите фото урожая или задайте вопрос —<br>
-                                ИИ определит состояние и даст рекомендации
+                                ИИ оценит признаки на фото и предложит следующие действия
                             </div>
                         </div>
 

@@ -51,6 +51,7 @@ return [
 
     'n8n' => [
         'crop_webhook' => env('N8N_CROP_WEBHOOK_URL'),
+        'crop_secret' => env('N8N_CROP_WEBHOOK_SECRET'),
     ],
 
 ];

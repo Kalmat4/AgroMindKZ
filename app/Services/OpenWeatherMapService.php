@@ -12,8 +12,8 @@ class OpenWeatherMapService
 
     public function getForecast(float $lat, float $lon): ?array
     {
-        $lat      = round($lat, 2);
-        $lon      = round($lon, 2);
+        $lat      = round($lat, 5);
+        $lon      = round($lon, 5);
         $cacheKey = "owm:forecast:{$lat},{$lon}";
 
         $cached = Cache::get($cacheKey);
