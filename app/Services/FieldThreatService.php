@@ -83,22 +83,33 @@ class FieldThreatService
         ];
     }
 
-    /** Деньги под угрозой: площадь × урожайность × цена. Урожайность — средняя по РК из базы. */
+    /**
+     * Деньги под угрозой: площадь × урожайность × цена. Урожайность — официальная (Бюро нацстатистики, crop_yields)
+     * за последний год: по области поля, а если по ней нет — в среднем по Казахстану.
+     */
     public function damage(Field $field): array
     {
-        $crop = $field->crop_code ? DB::table('crops')->where('code', $field->crop_code)->first() : null;
-        $yield = $crop ? DB::table('national_yield_summary')
-            ->where('crop_id', $crop->id)
-            ->whereNotNull('yield_centner_ha')
-            ->orderByDesc('harvest_year')
-            ->first(['yield_centner_ha', 'harvest_year']) : null;
+        $crop  = $field->crop_code ? DB::table('crops')->where('code', $field->crop_code)->first() : null;
+        $yield = null;
+        if ($crop) {
+            $latest = fn(?string $region) => DB::table('crop_yields')
+                ->where('crop_code', $crop->code)
+                ->where('region_code', $region)
+                ->orderByDesc('harvest_year')
+                ->first();
+            $yield = ($field->region_code ? $latest($field->region_code) : null) ?? $latest(null);
+        }
+        $region = $yield?->region_code ? DB::table('regions')->where('code', $yield->region_code)->value('name_ru') : null;
 
-        $tons = $yield ? $field->area_ha * $yield->yield_centner_ha / 10 : null;
+        $tons = $yield ? $field->area_ha * $yield->yield_c_ha / 10 : null;
 
         return [
             'crop'          => $crop?->name_ru,
-            'yield_c_ha'    => $yield ? (float) $yield->yield_centner_ha : null,
+            'yield_c_ha'    => $yield ? (float) $yield->yield_c_ha : null,
             'yield_year'    => $yield?->harvest_year,
+            'yield_scope'   => $yield ? ($region ? (str_contains(mb_strtolower($region), 'област') ? $region : "{$region} обл.") : 'в среднем по РК') : null,
+            'yield_source'  => $yield?->source,
+            'yield_url'     => $yield?->source_url,
             'tons'          => $tons === null ? null : round($tons, $tons < 100 ? 1 : 0),
             'price_per_ton' => $field->price_per_ton,
             'tenge'         => $tons !== null && $field->price_per_ton ? (int) round($tons * $field->price_per_ton) : null,

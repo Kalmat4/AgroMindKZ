@@ -351,8 +351,12 @@ function tenge(n) {
                     <template v-if="f.assessment.damage.tenge">
                         💰 Урожай поля: ~{{ f.assessment.damage.tons.toLocaleString('ru-RU') }} т · <b>{{ tenge(f.assessment.damage.tenge) }}</b>
                         <div class="fp-muted">
-                            {{ f.area_ha }} га × {{ f.assessment.damage.yield_c_ha }} ц/га (средняя по РК, {{ f.assessment.damage.yield_year }})
+                            {{ f.area_ha }} га × {{ f.assessment.damage.yield_c_ha }} ц/га
                             = {{ f.assessment.damage.tons.toLocaleString('ru-RU') }} т × {{ tenge(f.assessment.damage.price_per_ton) }}/т
+                        </div>
+                        <div class="fp-muted">
+                            Урожайность: {{ f.assessment.damage.yield_scope }}, {{ f.assessment.damage.yield_year }} —
+                            <a :href="f.assessment.damage.yield_url" target="_blank" rel="noopener" :title="f.assessment.damage.yield_source">Бюро нацстатистики РК</a>
                         </div>
                     </template>
                     <span v-else class="fp-muted">Укажите культуру и цену за тонну, чтобы видеть сумму под угрозой</span>

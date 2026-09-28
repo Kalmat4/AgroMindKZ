@@ -13,6 +13,7 @@ class Field extends Model
         'name',
         'lat',
         'lon',
+        'region_code',
         'area_ha',
         'crop_code',
         'price_per_ton',
