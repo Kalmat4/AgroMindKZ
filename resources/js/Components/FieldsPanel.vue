@@ -4,6 +4,7 @@
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import axios from 'axios'
 import L from 'leaflet'
+import { createWindLayer, windBadge } from './windLayer.js'
 
 const props = defineProps({
     map: { type: Object, required: true },
@@ -38,6 +39,7 @@ function emptyForm() {
 
 const layer = L.layerGroup()
 const draftLayer = L.layerGroup()
+const wind = createWindLayer(props.map)
 
 const selected = computed(() => fields.value.find(f => f.id === selectedId.value) ?? null)
 
@@ -59,6 +61,7 @@ watch(() => props.active, on => {
     } else {
         layer.remove()
         draftLayer.remove()
+        wind.hide()
         props.map.off('click', onMapClick)
         addMode.value = false
     }
@@ -68,6 +71,7 @@ onBeforeUnmount(() => {
     props.map.off('click', onMapClick)
     layer.remove()
     draftLayer.remove()
+    wind.destroy()
     clearInterval(linkPoll)
 })
 
@@ -97,6 +101,7 @@ function fitToFields() {
 
 function render() {
     layer.clearLayers()
+    if (!selected.value) wind.hide()
     for (const f of fields.value) {
         const lvl = LEVELS[f.assessment?.level] ?? LEVELS.safe
         const isSel = f.id === selectedId.value
@@ -110,7 +115,8 @@ function render() {
             for (const t of f.assessment?.threats ?? []) {
                 const c = (LEVELS[t.level] ?? LEVELS.watch).color
                 L.polyline([[t.lat, t.lon], [f.lat, f.lon]], {
-                    color: c, weight: t.downwind ? 3 : 1.5, dashArray: t.downwind ? null : '4 6', opacity: 0.8,
+                    color: c, weight: t.downwind ? 3 : 1.5, dashArray: t.downwind ? '10 8' : '4 6', opacity: 0.85,
+                    className: t.downwind ? 'fp-fire-flow' : '',
                 }).addTo(layer)
                 L.circleMarker([t.lat, t.lon], { radius: 6, color: '#fff', weight: 1, fillColor: '#ff2200', fillOpacity: 0.95 })
                     .bindTooltip(`🔥 ${t.distance_km} км · ${t.downwind ? 'ветер на поле' : 'ветер не на поле'}${t.eta_hours ? ` · ~${t.eta_hours} ч` : ''}`)
@@ -128,18 +134,15 @@ function render() {
     }
 }
 
-// Стрелка «куда дует ветер» от поля, длина ~ скорость ветра
+// Поток ветра частицами в круге поля и компас со скоростью на самом поле
 function drawWindArrow(f) {
     const w = f.assessment?.wind
-    if (!w || w.deg === null || w.deg === undefined || w.speed < 0.5) return
-    const to = ((w.deg + 180) % 360) * Math.PI / 180
-    const km = Math.min(40, 4 + w.speed * 3)
-    const dLat = (km / 111) * Math.cos(to)
-    const dLon = (km / (111 * Math.cos(f.lat * Math.PI / 180))) * Math.sin(to)
-    L.polyline([[f.lat, f.lon], [f.lat + dLat, f.lon + dLon]], { color: '#38bdf8', weight: 3, opacity: 0.9 })
-        .bindTooltip(`💨 ветер ${w.speed} м/с с ${w.from}`)
-        .addTo(layer)
-    L.circleMarker([f.lat + dLat, f.lon + dLon], { radius: 4, color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 1 }).addTo(layer)
+    if (!w || w.deg === null || w.deg === undefined || w.speed < 0.3) {
+        wind.hide()
+        return
+    }
+    wind.show(f.lat, f.lon, f.assessment.radius_km ?? 50, w.speed, w.deg)
+    L.marker([f.lat, f.lon], { icon: windBadge(w.speed, w.deg, w.from), interactive: false, keyboard: false }).addTo(layer)
 }
 
 function select(id) {
@@ -420,4 +423,27 @@ function tenge(n) {
 :global(html[data-theme="light"]) .fp-money { background: #f4f7f4; color: #1a2e1d; border-color: #c4ddc8; }
 :global(html[data-theme="light"]) .fp-muted { color: #6b8570; }
 :global(.fp-tooltip) { font-weight: 700; }
+
+:global(.afs-wind-badge) { position: relative; pointer-events: none; }
+:global(.afs-wind-badge__arrow) {
+    position: absolute; left: -20px; top: 16px; width: 40px; height: 40px;
+    transform: rotate(var(--wind-rot)); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.45));
+}
+:global(.afs-wind-badge__arrow svg) { animation: afs-wind-sway 2.4s ease-in-out infinite; }
+:global(.afs-wind-badge__arrow circle) { fill: rgba(15, 23, 42, 0.78); stroke: #7dd3fc; stroke-width: 1.5; }
+:global(.afs-wind-badge__arrow path) { fill: #7dd3fc; }
+:global(.afs-wind-badge__text) {
+    position: absolute; left: -50px; top: 58px; width: 100px; text-align: center;
+    font: 700 11px/1.2 -apple-system, 'Segoe UI', Roboto, sans-serif; color: #0c4a6e;
+    background: rgba(224, 242, 254, 0.92); border-radius: 10px; padding: 2px 6px; white-space: nowrap;
+}
+:global(.fp-fire-flow) { animation: afs-fire-flow 1s linear infinite; }
+@keyframes afs-wind-sway {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+@keyframes afs-fire-flow { to { stroke-dashoffset: -18; } }
+@media (prefers-reduced-motion: reduce) {
+    :global(.afs-wind-badge__arrow svg), :global(.fp-fire-flow) { animation: none; }
+}
 </style>
