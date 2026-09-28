@@ -54,6 +54,8 @@ return [
     'n8n' => [
         'crop_webhook' => env('N8N_CROP_WEBHOOK_URL'),
         'crop_secret' => env('N8N_CROP_WEBHOOK_SECRET'),
+        'crop_legacy' => env('N8N_CROP_LEGACY', false),
+        'weather_in_n8n' => env('N8N_CROP_WEATHER_IN_N8N', false),
     ],
 
 ];
