@@ -102,7 +102,7 @@ import { Head, Link } from '@inertiajs/vue3'
 
         <!-- Footer -->
         <footer class="about-footer">
-            AgroMind KZ · Green &amp; Digital Solutions for Central Asia · 2026
+            AgroMind KZ · 2026
         </footer>
 
     </div>
