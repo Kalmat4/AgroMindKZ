@@ -336,7 +336,7 @@ function tenge(n) {
                 <div v-else class="fp-line">✅ Термоточек в радиусе {{ f.assessment.radius_km }} км за 48 ч нет</div>
 
                 <div class="fp-line">
-                    💨 Ветер {{ f.assessment.wind.speed }} м/с<template v-if="f.assessment.wind.from">, с {{ f.assessment.wind.from }}</template>
+                    💨 Ветер сейчас {{ f.assessment.wind.speed }} м/с<template v-if="f.assessment.wind.from">, с {{ f.assessment.wind.from }}</template>
                 </div>
                 <div class="fp-line">
                     🌡️ Пожароопасность погоды:
@@ -364,7 +364,7 @@ function tenge(n) {
 
         <div class="fp-section fp-legend fp-muted">
             Термоточки — NASA FIRMS (VIIRS), 48 ч. Ветер и пожароопасность — прогноз OpenWeatherMap, индекс Hot-Dry-Windy.
-            Время подхода огня — грубая оценка (≈10 % скорости ветра).
+            Время подхода огня — грубая оценка (≈10 % скорости ветра). <a href="/data#fields" target="_blank">Как считаем</a>
         </div>
     </div>
 </template>
@@ -407,6 +407,7 @@ function tenge(n) {
 .fp-threat { border-left: 3px solid; padding: 2px 8px; font-size: 12px; }
 .fp-money { background: #111; border-radius: 8px; padding: 8px; font-size: 12px; }
 .fp-legend { line-height: 1.5; border-bottom: none; }
+.fp-legend a { color: #4ade80; }
 
 :global(html[data-theme="light"]) .fp-panel { background: #fff; color: #1a2e1d; border-color: #c4ddc8; border-top-color: #00a550; box-shadow: 0 4px 24px rgba(0,0,0,0.12); }
 :global(html[data-theme="light"]) .fp-header,

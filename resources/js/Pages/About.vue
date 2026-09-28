@@ -102,13 +102,14 @@ import { Head, Link } from '@inertiajs/vue3'
 
         <!-- Footer -->
         <footer class="about-footer">
-            AgroMind KZ · 2026
+            AgroMind KZ · 2026 · <Link href="/data" class="about-footer__link">Данные и источники</Link>
         </footer>
 
     </div>
 </template>
 
 <style scoped>
+.about-footer__link { color: #00e676; text-decoration: none; }
 *,
 *::before,
 *::after {

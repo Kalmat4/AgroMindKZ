@@ -215,7 +215,7 @@ function renderForecastMarker(oblast, data) {
     marker.bindPopup(
         `<div style="font-family:sans-serif;font-size:13px;line-height:1.6;min-width:200px">` +
         `<b>${oblast.name}</b><br>` +
-        `🌡️ ${s?.temp_min}…${s?.temp_max}°C &nbsp; 💧 ${s?.precip_total} мм &nbsp; 💨 ${s?.wind_max} м/с<br>` +
+        `🌡️ ${s?.temp_min}…${s?.temp_max}°C &nbsp; 💧 ${s?.precip_total} мм &nbsp; 💨 порывы до ${s?.wind_max} м/с<br>` +
         (data.forecast?.fire_danger?.index != null ? `🔥 Пожароопасность: <b style="color:${FIRE_DANGER_COLORS[data.forecast.fire_danger.level]}">${data.forecast.fire_danger.label}</b> (HDW ${data.forecast.fire_danger.index})<br>` : '') +
         (riskLines ? `<hr style="border-color:#333;margin:4px 0">${riskLines}` : `<span style="color:#4ade80">✅ Рисков не обнаружено</span>`) +
         `</div>`
@@ -798,15 +798,15 @@ function renderHotspots(spots) {
         })
             .bindPopup(
                 `<div style="font-family:sans-serif;font-size:13px;line-height:1.7;min-width:200px">` +
-                `<b style="font-size:14px">🔥 Очаг возгорания</b><br>` +
+                `<b style="font-size:14px">🔥 Термоточка (возможный пожар)</b><br>` +
                 `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${cfg.color}22;color:${cfg.color};border:1px solid ${cfg.color}55;margin:2px 0">` +
                 `${cfg.label}</span><br>` +
-                `<span style="color:#e05050">📅 Обнаружен:</span> <b>${formatSpotDateTime(spot)}</b><br>` +
-                `🌡️ Яркость: ${spot.brightness} K<br>` +
-                `⚡ FRP: ${spot.frp} МВт<br>` +
-                `🎯 Уверенность: ${spot.confidence}<br>` +
-                `🛰️ Спутник: ${spot.satellite || '—'}<br>` +
-                `🌗 Период: ${spot.daynight === 'D' ? 'День' : 'Ночь'}` +
+                `<span style="color:#e05050">📅 Снимок:</span> <b>${formatSpotDateTime(spot)}</b><br>` +
+                `⚡ Мощность огня (FRP): <b>${spot.frp} МВт</b><br>` +
+                `🌡️ Нагрев пикселя 375 м: ${spot.brightness} K (≈${Math.round(spot.brightness - 273.15)} °C)<br>` +
+                `🎯 Достоверность: ${confidenceLabel(spot.confidence)}<br>` +
+                `🛰️ ${satelliteName(spot.satellite)}, ${spot.daynight === 'D' ? 'дневной' : 'ночной'} пролёт<br>` +
+                `<a href="/data#firms" target="_blank" style="font-size:11px">Что значат эти данные?</a>` +
                 `</div>`
             )
             .addTo(hotspotLayer)
@@ -841,11 +841,20 @@ function spotToDate(spot) {
 function formatSpotDateTime(spot) {
     const d = spotToDate(spot)
     if (!d) return '—'
-    return d.toLocaleString('ru', {
-        day: '2-digit', month: '2-digit', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-        timeZone: 'UTC', timeZoneName: 'short',
-    })
+    // Казахстан с 2024 года живёт по UTC+5; сдвигаем вручную, не полагаясь на tzdata браузера
+    const kz = new Date(d.getTime() + 5 * 3600 * 1000)
+    const p = n => String(n).padStart(2, '0')
+    return `${p(kz.getUTCDate())}.${p(kz.getUTCMonth() + 1)} ${p(kz.getUTCHours())}:${p(kz.getUTCMinutes())} по Астане (${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC)`
+}
+
+const CONFIDENCE_LABELS = { l: 'низкая', n: 'средняя', h: 'высокая' }
+function confidenceLabel(c) {
+    return CONFIDENCE_LABELS[String(c).toLowerCase()] ?? (c ? c + '%' : '—')
+}
+
+const SATELLITE_NAMES = { N: 'Suomi NPP', J1: 'NOAA-20', J2: 'NOAA-21', T: 'Terra', A: 'Aqua' }
+function satelliteName(s) {
+    return SATELLITE_NAMES[s] ?? (s || 'Спутник')
 }
 
 function getSpotSeverity(spot) {
@@ -1101,12 +1110,12 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                                 индекс HDW {{ selectedForecast.forecast.fire_danger.index }}
                             </span>
                         </div>
-                        <p class="afs-rp__update-text">Жара × сухость воздуха × ветер по прогнозу OpenWeatherMap (Hot-Dry-Windy Index)</p>
+                        <p class="afs-rp__update-text">Жара × сухость воздуха × ветер по прогнозу OpenWeatherMap (Hot-Dry-Windy Index). <a href="/data#fire-danger" target="_blank">Подробнее</a></p>
                     </div>
 
                     <!-- Weather summary -->
                     <div v-if="selectedForecast?.forecast?.summary" class="afs-rp__section">
-                        <div class="afs-rp__section-title">Погода на 5 дней</div>
+                        <div class="afs-rp__section-title">Прогноз на 5 дней · центр области</div>
                         <div class="afs-rp__eco-row">
                             <div class="afs-rp__eco-card">
                                 <div class="afs-rp__eco-label">🌡️ Темп.</div>
@@ -1117,7 +1126,7 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                                 <div class="afs-rp__eco-value">{{ selectedForecast.forecast.summary.precip_total }} мм</div>
                             </div>
                             <div class="afs-rp__eco-card">
-                                <div class="afs-rp__eco-label">💨 Ветер</div>
+                                <div class="afs-rp__eco-label">💨 Порывы до</div>
                                 <div class="afs-rp__eco-value">{{ selectedForecast.forecast.summary.wind_max }} м/с</div>
                             </div>
                         </div>
@@ -1212,7 +1221,7 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                                     <td>{{ h.acq_date }} {{ formatHotspotTime(h.acq_time) }}</td>
                                     <td><span :class="severityBadgeClass(h)" class="afs-sev-table-badge">{{ severityLabel(h) }}</span></td>
                                     <td>{{ h.frp }} МВт</td>
-                                    <td>{{ h.satellite || '—' }}</td>
+                                    <td>{{ satelliteName(h.satellite) }}</td>
                                 </tr>
                             </tbody>
                         </table>

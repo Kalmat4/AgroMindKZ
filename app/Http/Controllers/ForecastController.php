@@ -41,7 +41,7 @@ class ForecastController extends Controller
                 'type'     => 'fire',
                 'severity' => $fireSeverity,
                 'date'     => '',
-                'detail'   => $fireCount . ' очаг(ов) за 48ч',
+                'detail'   => 'термоточек за 48 ч: ' . $fireCount,
             ];
             if ($this->rank($fireSeverity) > $this->rank($forecast['severity'])) {
                 $forecast['severity'] = $fireSeverity;

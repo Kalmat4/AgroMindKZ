@@ -15,6 +15,9 @@ Route::get('/', [AboutController::class, 'index'])->name('home');
 
 Route::get('/about', fn() => Inertia::render('About'))->name('about');
 
+// Публичная справка по данным — ссылку можно давать без входа
+Route::get('/data', fn() => Inertia::render('Data'))->name('data');
+
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
