@@ -10,6 +10,7 @@ const props = defineProps({
     map: { type: Object, required: true },
     active: { type: Boolean, default: false },
 })
+const emit = defineEmits(['selection-change', 'ask-agronomist'])
 
 const LEVELS = {
     critical: { label: 'Критическая угроза', color: '#ef4444', icon: '🚨' },
@@ -42,6 +43,7 @@ const draftLayer = L.layerGroup()
 const wind = createWindLayer(props.map)
 
 const selected = computed(() => fields.value.find(f => f.id === selectedId.value) ?? null)
+watch(selected, field => emit('selection-change', field), { immediate: true, flush: 'sync' })
 
 const totals = computed(() => {
     const atRisk = fields.value.filter(f => ['critical', 'high'].includes(f.assessment?.level))
@@ -81,6 +83,7 @@ async function load() {
     try {
         const { data } = await axios.get('/fields')
         fields.value = data.fields
+        if (!selected.value) selectedId.value = null
         crops.value = data.crops
         telegram.value = data.telegram
         loaded.value = true
@@ -321,6 +324,10 @@ function tenge(n) {
                 </span>
             </div>
 
+            <div v-if="f.id === selectedId" class="fp-field__ask">
+                <button class="fp-btn fp-btn--primary" @click="emit('ask-agronomist', f)">🌿 Спросить ИИ-агронома</button>
+            </div>
+
             <div v-if="f.id === selectedId && f.assessment" class="fp-field__body">
                 <div v-if="!f.assessment.firms_ok" class="fp-warn">⚠️ Спутник NASA FIRMS сейчас не ответил — оценка неполная</div>
 
@@ -413,6 +420,7 @@ function tenge(n) {
 .fp-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .fp-badge { font-size: 11px; font-weight: 700; white-space: nowrap; }
 .fp-field__body { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 6px; }
+.fp-field__ask { display: flex; padding: 0 14px 10px; }
 .fp-line { font-size: 12px; }
 .fp-threat { border-left: 3px solid; padding: 2px 8px; font-size: 12px; }
 .fp-money { background: #111; border-radius: 8px; padding: 8px; font-size: 12px; }

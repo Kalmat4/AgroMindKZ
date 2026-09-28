@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CropChatMessage;
 use App\Models\CropChatSession;
+use App\Models\User;
 use App\Models\Zone;
 use App\Services\AgronomistContextService;
 use Illuminate\Support\Facades\DB;
@@ -11,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class CropChatController extends Controller
 {
@@ -67,6 +69,7 @@ class CropChatController extends Controller
             'image'        => ['nullable', 'string', 'max:7000000'],
             'mediaType'    => ['nullable', 'string', 'in:image/jpeg,image/png,image/webp,image/gif', 'max:50'],
             'sessionId'    => ['nullable', 'integer'],
+            'fieldId'      => ['nullable', 'integer', 'min:1'],
             'field' => ['nullable', 'array:lat,lon,crop,growth_stage,irrigation', 'min:2'],
             'field.lat' => ['required_with:field', 'numeric', 'between:-90,90'],
             'field.lon' => ['required_with:field', 'numeric', 'between:-180,180'],
@@ -115,8 +118,7 @@ class CropChatController extends Controller
                 ->reverse()
             : collect();
 
-        // Each chat retains its field. Explicit null clears it; omission preserves it.
-        $field = array_key_exists('field', $data) ? $data['field'] : $session?->field_context;
+        $field = $this->fieldFor($data, $session, $user);
         $context = $this->context->build($field, $this->regionFor($data['region'] ?? null, $user->id));
         $payload = [
             'schema_version' => 2,
@@ -168,6 +170,44 @@ class CropChatController extends Controller
                 'field' => $field,
             ]);
         });
+    }
+
+    /** Saved map fields are resolved on the server, including their current coordinates. */
+    private function fieldFor(array $data, ?CropChatSession $session, User $user): ?array
+    {
+        if (array_key_exists('fieldId', $data)) {
+            // Explicit null means the map selection was cleared; never restore an old chat's field.
+            $fieldId = $data['fieldId'];
+            if ($fieldId === null) {
+                return null;
+            }
+        } else {
+            // Retain compatibility with older clients that sent a manually selected point.
+            $field = array_key_exists('field', $data) ? $data['field'] : $session?->field_context;
+            $fieldId = $field['id'] ?? null;
+            if ($fieldId === null) {
+                return $field;
+            }
+        }
+
+        $saved = $user->fields()->find($fieldId);
+        if (! $saved) {
+            throw ValidationException::withMessages([
+                'fieldId' => 'Поле больше недоступно. Выберите своё поле в разделе «Мои поля».',
+            ]);
+        }
+
+        return [
+            'id' => $saved->id,
+            'name' => $saved->name,
+            'lat' => $saved->lat,
+            'lon' => $saved->lon,
+            'area_ha' => $saved->area_ha,
+            'crop_code' => $saved->crop_code,
+            'crop' => $saved->crop_code
+                ? DB::table('crops')->where('code', $saved->crop_code)->value('name_ru')
+                : null,
+        ];
     }
 
     /** Регион, о котором спрашивают: выбранный на карте, иначе сохранённая зона пользователя. */

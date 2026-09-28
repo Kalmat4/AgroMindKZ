@@ -1,7 +1,6 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import AgronomistField from '@/Components/AgronomistField.vue'
 import FieldsPanel from '@/Components/FieldsPanel.vue'
 import { ref, shallowRef, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import axios from 'axios'
@@ -235,7 +234,7 @@ const selectedForecast = computed(() => {
 })
 
 // ── Crop Chat ─────────────────────────────────────────────────────────────────
-const cropField = ref(null)
+const selectedMapField = ref(null)
 const cropMessages = ref([])
 const cropInput = ref('')
 const cropImage = ref(null)
@@ -270,7 +269,6 @@ async function loadSession(id) {
     try {
         const { data } = await axios.get(`/crop/sessions/${id}`)
         cropMessages.value = data.messages
-        cropField.value = data.session.field_context ?? null
         await nextTick()
         scrollCropToBottom()
     } finally {
@@ -280,7 +278,6 @@ async function loadSession(id) {
 
 function startNewChat() {
     if (cropLoading.value) return
-    cropField.value = null
     currentSessionId.value = null
     cropMessages.value = []
     cropInput.value = ''
@@ -340,6 +337,16 @@ async function sendCrop() {
     const img = cropImage.value
     const media = cropMediaType.value
     if (cropLoading.value || (!text && !img)) return
+    // Capture the map selection for this message before any asynchronous work.
+    const fieldId = selectedMapField.value?.id ?? null
+    const sessionId = currentSessionId.value
+    const region = selectedOblast.value ? {
+        name: selectedOblast.value.name,
+        west: selectedOblast.value.west,
+        south: selectedOblast.value.south,
+        east: selectedOblast.value.east,
+        north: selectedOblast.value.north,
+    } : null
     cropLoading.value = true
 
     cropMessages.value.push({ role: 'user', text, preview: cropPreview.value })
@@ -352,17 +359,12 @@ async function sendCrop() {
     try {
         const { data } = await axios.post('/n8n/crop', {
             message: text,
-            field: cropField.value,
+            fieldId,
+            field: null,
             image: img,
             mediaType: media,
-            sessionId: currentSessionId.value,
-            region: selectedOblast.value ? {
-                name: selectedOblast.value.name,
-                west: selectedOblast.value.west,
-                south: selectedOblast.value.south,
-                east: selectedOblast.value.east,
-                north: selectedOblast.value.north,
-            } : null,
+            sessionId,
+            region,
         })
 
         if (data.sessionId && data.sessionId !== currentSessionId.value) {
@@ -374,7 +376,8 @@ async function sendCrop() {
 
         cropMessages.value.push({ role: 'ai', text: data.response ?? data, preview: null })
     } catch (e) {
-        cropMessages.value.push({ role: 'ai', text: e.response?.data?.error || t('home.chat_error'), preview: null })
+        const validationError = Object.values(e.response?.data?.errors ?? {}).flat().find(value => typeof value === 'string')
+        cropMessages.value.push({ role: 'ai', text: e.response?.data?.error || validationError || t('home.chat_error'), preview: null })
     } finally {
         cropLoading.value = false
         await nextTick()
@@ -822,7 +825,22 @@ function renderHotspots(spots) {
 
 function openAiWithContext() {
     switchTab('crop')
-    cropInput.value = `Оцени риск пожаров и угрозы урожаю в регионе «${selectedOblast.value.name}» на ближайшие дни. Что делать фермеру прямо сейчас?`
+    const location = selectedMapField.value
+        ? `на поле «${selectedMapField.value.name}»`
+        : `в регионе «${selectedOblast.value.name}»`
+    cropInput.value = `Оцени риск пожаров и угрозы урожаю ${location} на ближайшие дни. Что делать фермеру прямо сейчас?`
+    nextTick(() => scrollCropToBottom())
+}
+
+function selectFieldForAgronomist() {
+    switchTab('map')
+    switchMapLayer('fields')
+    nextTick(() => leafletMap.value?.invalidateSize())
+}
+
+function askAboutField(field) {
+    selectedMapField.value = field
+    switchTab('crop')
     nextTick(() => scrollCropToBottom())
 }
 
@@ -1028,7 +1046,8 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 
                 <div ref="mapEl" class="afs-map"></div>
 
-                <FieldsPanel v-if="leafletMap" :map="leafletMap" :active="activeTab === 'map' && mapLayer === 'fields'" />
+                <FieldsPanel v-if="leafletMap" :map="leafletMap" :active="activeTab === 'map' && mapLayer === 'fields'"
+                    @selection-change="selectedMapField = $event" @ask-agronomist="askAboutField" />
 
                 <!-- Return to saved zone button -->
                 <button
@@ -1276,7 +1295,24 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 
                 <!-- Main chat area -->
                 <div class="afs-crop-main">
-                    <AgronomistField v-model="cropField" :disabled="cropLoading" />
+                    <div class="afs-crop-field">
+                        <div v-if="selectedMapField">
+                            <strong>📍 {{ selectedMapField.name }}</strong>
+                            <div class="afs-crop-field__detail">
+                                {{ Number(selectedMapField.lat).toFixed(5) }}, {{ Number(selectedMapField.lon).toFixed(5) }}
+                                · {{ selectedMapField.area_ha }} га · {{ selectedMapField.assessment?.damage?.crop || 'культура не указана' }}
+                            </div>
+                            <div class="afs-crop-field__detail">Координаты поля из «Мои поля» автоматически передаются ИИ и сервису погоды.</div>
+                        </div>
+                        <div v-else>
+                            <strong>📍 Поле не выбрано</strong>
+                            <div class="afs-crop-field__detail">Выберите сохранённое поле на карте пожаров, чтобы помощник получил его координаты.</div>
+                            <div class="afs-crop-field__detail">Без поля погода может оцениваться приблизительно по региону.</div>
+                        </div>
+                        <button type="button" class="afs-crop-field__select" @click="selectFieldForAgronomist">
+                            {{ selectedMapField ? 'Изменить поле' : 'Выбрать в «Мои поля»' }}
+                        </button>
+                    </div>
 
                     <!-- Messages -->
                     <div ref="cropScrollEl" class="afs-crop-messages">
@@ -1858,6 +1894,29 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
     flex-direction: column;
     overflow: hidden;
     background: #1a1a1a;
+}
+
+.afs-crop-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #333;
+    color: #e5e5e5;
+    font-size: 13px;
+}
+.afs-crop-field__detail { margin-top: 4px; color: #aaa; font-size: 12px; }
+.afs-crop-field__select {
+    flex-shrink: 0;
+    padding: 7px 10px;
+    border: 1px solid #4ade80;
+    border-radius: 7px;
+    background: transparent;
+    color: #4ade80;
+    cursor: pointer;
+    font-size: 12px;
 }
 
 .afs-crop-messages {
@@ -2810,6 +2869,9 @@ html[data-theme="light"] .afs-session-item__del    { color: #9ab0a0; }
 html[data-theme="light"] .afs-session-item__del:hover { color: #dc2626; }
 
 html[data-theme="light"] .afs-crop-main            { background: #f8faf8; }
+html[data-theme="light"] .afs-crop-field           { color: #1a2e1d; border-bottom-color: #c4ddc8; }
+html[data-theme="light"] .afs-crop-field__detail   { color: #6b8570; }
+html[data-theme="light"] .afs-crop-field__select   { color: #007a3a; border-color: #007a3a; }
 html[data-theme="light"] .afs-crop-messages        { background: #f8faf8; }
 html[data-theme="light"] .afs-crop-empty__title    { color: #1a2e1d; }
 html[data-theme="light"] .afs-crop-empty__hint     { color: #6b8570; }
