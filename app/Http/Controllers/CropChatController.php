@@ -192,9 +192,13 @@ class CropChatController extends Controller
     {
         $url = config('services.n8n.crop_webhook');
         $secret = config('services.n8n.crop_secret');
-        if (! $url || ! $secret) {
-            Log::error('Настройте N8N_CROP_WEBHOOK_URL и N8N_CROP_WEBHOOK_SECRET');
+        if (! $url) {
+            Log::error('Настройте N8N_CROP_WEBHOOK_URL');
             return null;
+        }
+        // Пока воркфлоу v2 не развёрнут в n8n и секрет не задан, работаем через боевой v1
+        if (! $secret) {
+            return $this->askLegacyN8n($url, $payload);
         }
         try {
             $resp = Http::connectTimeout(10)->timeout(90)->acceptJson()
@@ -211,4 +215,98 @@ class CropChatController extends Controller
             return null;
         }
     }
+
+    /**
+     * Воркфлоу v1 (crop-chat) читает только поле message и фото в multipart,
+     * поэтому контекст и историю передаём внутри текста.
+     */
+    private function askLegacyN8n(string $url, array $payload): ?string
+    {
+        $http = Http::connectTimeout(10)->timeout(90)->asMultipart();
+        if (! empty($payload['image'])) {
+            $ext  = explode('/', $payload['mediaType'])[1] ?? 'jpg';
+            $http = $http->attach('image', base64_decode($payload['image']), "photo.{$ext}", ['Content-Type' => $payload['mediaType']]);
+        }
+
+        try {
+            $resp = $http->post($url, [
+                'message'   => $this->legacyPrompt($payload),
+                'mediaType' => $payload['mediaType'],
+                'sessionId' => (string) ($payload['sessionId'] ?? ''),
+                'user_id'   => (string) $payload['user_id'],
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('n8n v1 crop chat unavailable', ['exception' => get_class($e)]);
+            return null;
+        }
+
+        $json = $resp->json();
+        $text = is_string($json) ? $json : (is_array($json) ? ($json['output'] ?? $json['response'] ?? $json['text'] ?? null) : null);
+        // v1 превращает ошибку Anthropic в обычный текст со статусом 200
+        if (! $resp->successful() || ! is_string($text) || trim($text) === '' || str_starts_with($text, 'Ошибка API')) {
+            Log::warning('n8n v1 crop chat failed', ['status' => $resp->status(), 'body' => mb_substr($resp->body(), 0, 300)]);
+            return null;
+        }
+
+        return $text;
+    }
+
+    private function legacyPrompt(array $payload): string
+    {
+        $ctx   = $payload['context'];
+        $lines = [];
+
+        $loc = $ctx['location'];
+        if ($loc['point']) {
+            $lines[] = $loc['scope'] === 'selected_point'
+                ? sprintf('Участок пользователя: %.5f, %.5f.', $loc['point']['lat'], $loc['point']['lon'])
+                : "Регион пользователя: {$loc['region_name']} (центр региона, приблизительно).";
+        }
+        if ($field = $ctx['field']) {
+            $irrigation = ['rainfed' => 'богара', 'irrigated' => 'орошаемое'][$field['irrigation'] ?? ''] ?? null;
+            $lines[] = 'Культура: ' . (($field['crop'] ?? '') ?: 'не указана')
+                . (($field['growth_stage'] ?? '') ? ", фаза: {$field['growth_stage']}" : '')
+                . ($irrigation ? ", {$irrigation}" : '') . '.';
+        }
+
+        $spots = $ctx['thermal_anomalies'];
+        if ($spots['search_bbox']) {
+            $lines[] = $spots['status'] === 'available'
+                ? "Термоточки NASA FIRMS (VIIRS, 48 ч) в зоне поиска: {$spots['count']}."
+                : 'Термоточки NASA FIRMS: данные сейчас недоступны.';
+        }
+
+        if ($w = $ctx['weather']['data']) {
+            $s = $w['summary'];
+            $lines[] = "Прогноз на 5 дней (OpenWeatherMap): {$s['temp_min']}…{$s['temp_max']} °C, осадки {$s['precip_total']} мм, ветер до {$s['wind_max']} м/с.";
+            $risks = array_map(fn($r) => (self::RISK_NAMES[$r['type']] ?? $r['type']) . ($r['detail'] ? " ({$r['detail']})" : ''), $w['risks']);
+            $lines[] = 'Угрозы по прогнозу: ' . ($risks ? implode('; ', $risks) : 'не выявлены') . '.';
+        }
+
+        $parts = [];
+        if ($lines) {
+            $parts[] = "[Контекст — данные платформы AgroMind KZ на " . now()->format('d.m.Y H:i') . "]\n" . implode("\n", $lines);
+        }
+        if ($payload['history']) {
+            $parts[] = "[Предыдущая переписка]\n" . implode("\n", array_map(
+                fn($m) => ($m['role'] === 'assistant' ? 'Агроном' : 'Пользователь') . ': ' . $m['text'],
+                $payload['history']
+            ));
+        }
+        $parts[] = "[Вопрос]\n" . $payload['message'];
+        if ($lines) {
+            $parts[] = 'Опирайся на контекст выше и называй регион пользователя, а не другой. Термоточки — не подтверждённые пожары. Если данных не хватает — скажи об этом, не выдумывай цифры.';
+        }
+
+        return implode("\n\n", $parts);
+    }
+
+    private const RISK_NAMES = [
+        'heavy_rain'  => 'ливень',
+        'hail_storm'  => 'град/гроза',
+        'strong_wind' => 'сильный ветер',
+        'drought'     => 'жара/засуха',
+        'frost'       => 'заморозки',
+        'fire'        => 'пожары',
+    ];
 }
