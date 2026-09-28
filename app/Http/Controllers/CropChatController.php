@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\CropChatMessage;
 use App\Models\CropChatSession;
 use App\Models\Zone;
-use App\Services\NasaFirmsService;
-use App\Services\OpenWeatherMapService;
+use App\Services\AgronomistContextService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -17,21 +17,7 @@ class CropChatController extends Controller
     private const HISTORY_LIMIT      = 10;
     private const HISTORY_TEXT_LIMIT = 1500;
 
-    private const RISK_NAMES = [
-        'heavy_rain'  => 'ливень',
-        'hail_storm'  => 'град/гроза',
-        'strong_wind' => 'сильный ветер',
-        'drought'     => 'жара/засуха',
-        'frost'       => 'заморозки',
-        'fire'        => 'пожары',
-    ];
-
-    private const SEVERITY_NAMES = ['high' => 'высокий', 'nominal' => 'средний', 'low' => 'низкий'];
-
-    public function __construct(
-        private NasaFirmsService $firms,
-        private OpenWeatherMapService $weather,
-    ) {}
+    public function __construct(private AgronomistContextService $context) {}
 
     public function sessions()
     {
@@ -77,17 +63,36 @@ class CropChatController extends Controller
     {
         $data = $request->validate([
             'message'      => ['nullable', 'string', 'max:4000'],
-            // base64 до ~8 МБ исходного файла
-            'image'        => ['nullable', 'string', 'max:11000000'],
-            'mediaType'    => ['nullable', 'string', 'starts_with:image/', 'max:50'],
+            // До 5 МБ исходного изображения, передача в JSON как base64.
+            'image'        => ['nullable', 'string', 'max:7000000'],
+            'mediaType'    => ['nullable', 'string', 'in:image/jpeg,image/png,image/webp,image/gif', 'max:50'],
             'sessionId'    => ['nullable', 'integer'],
-            'region'       => ['nullable', 'array'],
+            'field' => ['nullable', 'array:lat,lon,crop,growth_stage,irrigation', 'min:2'],
+            'field.lat' => ['required_with:field', 'numeric', 'between:-90,90'],
+            'field.lon' => ['required_with:field', 'numeric', 'between:-180,180'],
+            'field.crop' => ['nullable', 'string', 'max:100'],
+            'field.growth_stage' => ['nullable', 'string', 'max:100'],
+            'field.irrigation' => ['nullable', 'in:rainfed,irrigated,unknown'],
+            'region'       => ['nullable', 'array:name,west,south,east,north', 'min:5'],
             'region.name'  => ['required_with:region', 'string', 'max:100'],
             'region.west'  => ['required_with:region', 'numeric', 'between:-180,180'],
             'region.south' => ['required_with:region', 'numeric', 'between:-90,90'],
             'region.east'  => ['required_with:region', 'numeric', 'between:-180,180'],
             'region.north' => ['required_with:region', 'numeric', 'between:-90,90'],
         ]);
+
+        if (isset($data['region']) && ($data['region']['west'] >= $data['region']['east'] || $data['region']['south'] >= $data['region']['north'])) {
+            return response()->json(['error' => 'Неверные границы региона'], 422);
+        }
+        if (! empty($data['image'])) {
+            $bytes = base64_decode($data['image'], true);
+            $info = $bytes !== false ? @getimagesizefromstring($bytes) : false;
+            if (! $info || strlen($bytes) > 5 * 1024 * 1024 || $info[0] > 8000 || $info[1] > 8000
+                || ! in_array($info['mime'], ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], true)
+                || $info['mime'] !== ($data['mediaType'] ?? 'image/jpeg')) {
+                return response()->json(['error' => 'Нужно корректное фото JPEG, PNG, WebP или GIF до 5 МБ и 8000 px по стороне'], 422);
+            }
+        }
 
         $user      = Auth::user();
         $message   = trim($data['message'] ?? '');
@@ -110,40 +115,59 @@ class CropChatController extends Controller
                 ->reverse()
             : collect();
 
-        $prompt = $this->buildPrompt($message, $image !== null, $history, $this->regionFor($data['region'] ?? null, $user->id));
-
-        $aiText = $this->askN8n($prompt, $image, $mediaType, $session?->id, $user->id);
+        // Each chat retains its field. Explicit null clears it; omission preserves it.
+        $field = array_key_exists('field', $data) ? $data['field'] : $session?->field_context;
+        $context = $this->context->build($field, $this->regionFor($data['region'] ?? null, $user->id));
+        $payload = [
+            'schema_version' => 2,
+            'message' => $message ?: 'Проанализируй фото посевов: состояние, возможные проблемы и следующие действия.',
+            'image' => $image,
+            'mediaType' => $mediaType,
+            'context' => $context,
+            'history' => $history->map(fn ($m) => [
+                'role' => $m->role === 'ai' ? 'assistant' : 'user',
+                'text' => mb_substr($m->message ?: '(фото в предыдущем сообщении; сейчас оно недоступно)', 0, self::HISTORY_TEXT_LIMIT),
+            ])->values()->all(),
+            'sessionId' => $session?->id,
+            'user_id' => $user->id,
+        ];
+        $aiText = $this->askN8n($payload);
         if ($aiText === null) {
             return response()->json(['error' => 'ИИ-агроном сейчас недоступен, попробуйте позже'], 502);
         }
 
-        // Сохраняем пару «вопрос — ответ» только после успешного ответа, чтобы в истории не оставалось вопросов без ответа
-        if (! $session) {
-            $session = CropChatSession::create([
-                'user_id' => $user->id,
-                'title'   => $message !== '' ? mb_substr($message, 0, 60) : 'Фото-анализ ' . now()->format('d.m H:i'),
+        return DB::transaction(function () use ($session, $user, $message, $image, $mediaType, $aiText, $field) {
+            // Сохраняем пару «вопрос — ответ» только после успешного ответа, чтобы в истории не оставалось вопросов без ответа
+            if (! $session) {
+                $session = CropChatSession::create([
+                    'user_id' => $user->id,
+                    'title'   => $message !== '' ? mb_substr($message, 0, 60) : 'Фото-анализ ' . now()->format('d.m H:i'),
+                ]);
+            }
+
+            CropChatMessage::create([
+                'crop_chat_session_id' => $session->id,
+                'role'                 => 'user',
+                'message'              => $message,
+                'image_base64'         => $image,
+                'image_media_type'     => $image ? $mediaType : null,
             ]);
-        }
+            CropChatMessage::create([
+                'crop_chat_session_id' => $session->id,
+                'role'                 => 'ai',
+                'message'              => $aiText,
+            ]);
+            $session->field_context = $field;
+            $session->save();
+            $session->touch();
 
-        CropChatMessage::create([
-            'crop_chat_session_id' => $session->id,
-            'role'                 => 'user',
-            'message'              => $message,
-            'image_base64'         => $image,
-            'image_media_type'     => $image ? $mediaType : null,
-        ]);
-        CropChatMessage::create([
-            'crop_chat_session_id' => $session->id,
-            'role'                 => 'ai',
-            'message'              => $aiText,
-        ]);
-        $session->touch();
-
-        return response()->json([
-            'response'     => $aiText,
-            'sessionId'    => $session->id,
-            'sessionTitle' => $session->title,
-        ]);
+            return response()->json([
+                'response'     => $aiText,
+                'sessionId'    => $session->id,
+                'sessionTitle' => $session->title,
+                'field' => $field,
+            ]);
+        });
     }
 
     /** Регион, о котором спрашивают: выбранный на карте, иначе сохранённая зона пользователя. */
@@ -164,96 +188,27 @@ class CropChatController extends Controller
         ] : null;
     }
 
-    /**
-     * Воркфлоу n8n принимает только поле message: историю и регион он не читает,
-     * поэтому живые данные и переписку передаём внутри текста запроса.
-     */
-    private function buildPrompt(string $message, bool $hasImage, $history, ?array $region): string
-    {
-        $parts = [];
-
-        if ($region) {
-            $ctx   = ["Регион пользователя: {$region['name']} (данные платформы AgroMind KZ на " . now()->format('d.m.Y H:i') . ')'];
-            $spots = $this->firms->getHotspots($region['west'], $region['south'], $region['east'], $region['north']);
-            if ($spots === null) {
-                $ctx[] = 'Пожары (NASA FIRMS): данные сейчас недоступны.';
-            } else {
-                $strong = count(array_filter($spots, fn($s) => $s['severity'] === 'high'));
-                $ctx[]  = 'Пожары (NASA FIRMS, спутник VIIRS, 48 ч): ' . count($spots) . " термоточек, из них сильных: {$strong}.";
-            }
-
-            $lat      = ($region['south'] + $region['north']) / 2;
-            $lon      = ($region['west'] + $region['east']) / 2;
-            $forecast = $this->weather->getForecast($lat, $lon);
-            if ($forecast) {
-                $s     = $forecast['summary'];
-                $ctx[] = "Прогноз на 5 дней (OpenWeatherMap): {$s['temp_min']}…{$s['temp_max']} °C, осадки {$s['precip_total']} мм, ветер до {$s['wind_max']} м/с.";
-                $risks = array_map(
-                    fn($r) => (self::RISK_NAMES[$r['type']] ?? $r['type']) . ' — ' . (self::SEVERITY_NAMES[$r['severity']] ?? $r['severity']) . ($r['detail'] ? " ({$r['detail']})" : ''),
-                    $forecast['risks']
-                );
-                $ctx[] = 'Угрозы урожаю по прогнозу: ' . ($risks ? implode('; ', $risks) : 'не выявлены') . '.';
-            }
-            $parts[] = "[Контекст]\n" . implode("\n", $ctx);
-        }
-
-        if ($history->isNotEmpty()) {
-            $lines = $history->map(fn($m) => ($m->role === 'ai' ? 'Агроном' : 'Пользователь') . ': '
-                . mb_substr($m->message ?: '(фото)', 0, self::HISTORY_TEXT_LIMIT));
-            $parts[] = "[Предыдущая переписка]\n" . $lines->implode("\n");
-        }
-
-        $question = $message !== '' ? $message : 'Проанализируй фото посевов: состояние, проблемы, рекомендации.';
-        if ($parts) {
-            $question = "[Вопрос]\n" . $question
-                . "\n\nОпирайся на контекст выше, называй регион пользователя, а не другой. Если данных не хватает — скажи об этом, не выдумывай цифры.";
-        }
-        $parts[] = $question;
-
-        return implode("\n\n", $parts);
-    }
-
-    private function askN8n(string $prompt, ?string $image, string $mediaType, ?int $sessionId, int $userId): ?string
+    private function askN8n(array $payload): ?string
     {
         $url = config('services.n8n.crop_webhook');
-        if (! $url) {
-            Log::error('N8N_CROP_WEBHOOK_URL не задан');
+        $secret = config('services.n8n.crop_secret');
+        if (! $url || ! $secret) {
+            Log::error('Настройте N8N_CROP_WEBHOOK_URL и N8N_CROP_WEBHOOK_SECRET');
             return null;
         }
-
-        // Воркфлоу ждёт multipart: фото приходит в n8n бинарным файлом
-        $http = Http::timeout(90)->asMultipart();
-        if ($image) {
-            $ext  = explode('/', $mediaType)[1] ?? 'jpg';
-            $http = $http->attach('image', base64_decode($image), "photo.{$ext}", ['Content-Type' => $mediaType]);
-        }
-
         try {
-            $resp = $http->post($url, [
-                'message'   => $prompt,
-                'mediaType' => $mediaType,
-                'sessionId' => (string) ($sessionId ?? ''),
-                'user_id'   => (string) $userId,
-            ]);
+            $resp = Http::connectTimeout(10)->timeout(90)->acceptJson()
+                ->withHeaders(['X-AgroMind-Secret' => $secret])->post($url, $payload);
+            $json = $resp->json();
+            $text = is_array($json) ? ($json['response'] ?? null) : null;
+            if (! $resp->successful() || ! is_string($text) || trim($text) === '') {
+                Log::warning('n8n crop chat failed', ['status' => $resp->status()]);
+                return null;
+            }
+            return $text;
         } catch (\Throwable $e) {
-            Log::error('n8n crop chat request failed', ['message' => $e->getMessage()]);
+            Log::warning('n8n crop chat unavailable', ['exception' => get_class($e)]);
             return null;
         }
-
-        if (! $resp->successful()) {
-            Log::warning('n8n crop chat non-200', ['status' => $resp->status(), 'body' => mb_substr($resp->body(), 0, 300)]);
-            return null;
-        }
-
-        $json = $resp->json();
-        $text = is_string($json) ? $json : ($json['output'] ?? $json['response'] ?? $json['text'] ?? null);
-
-        // Воркфлоу превращает ошибку Anthropic в обычный текст со статусом 200
-        if (! is_string($text) || trim($text) === '' || str_starts_with($text, 'Ошибка API')) {
-            Log::warning('n8n crop chat bad payload', ['body' => mb_substr($resp->body(), 0, 300)]);
-            return null;
-        }
-
-        return $text;
     }
 }
