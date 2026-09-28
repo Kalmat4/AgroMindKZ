@@ -23,7 +23,10 @@ class AgronomistContextService
             $bbox = $region;
         }
 
-        $forecast = $point ? $this->weather->getForecast($point['lat'], $point['lon']) : null;
+        // v2 can fetch weather with native n8n tools for the selected coordinates.
+        // Keep the existing backend forecast for legacy deployments.
+        $weatherInN8n = config('services.n8n.weather_in_n8n') && ! config('services.n8n.crop_legacy');
+        $forecast = $point && ! $weatherInN8n ? $this->weather->getForecast($point['lat'], $point['lon']) : null;
         // The existing weather service returns zeroes for an empty response. They are not observations.
         if (empty($forecast['periods'])) {
             $forecast = null;

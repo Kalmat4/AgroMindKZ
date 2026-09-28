@@ -196,13 +196,17 @@ class CropChatController extends Controller
             Log::error('Настройте N8N_CROP_WEBHOOK_URL');
             return null;
         }
-        // Пока воркфлоу v2 не развёрнут в n8n и секрет не задан, работаем через боевой v1
-        if (! $secret) {
+        // Protocol selection must not depend on optional webhook authentication.
+        // v2 sends coordinates and images as JSON even when no secret is configured.
+        if (config('services.n8n.crop_legacy')) {
             return $this->askLegacyN8n($url, $payload);
         }
         try {
-            $resp = Http::connectTimeout(10)->timeout(90)->acceptJson()
-                ->withHeaders(['X-AgroMind-Secret' => $secret])->post($url, $payload);
+            $http = Http::connectTimeout(10)->timeout(90)->acceptJson();
+            if ($secret) {
+                $http = $http->withHeaders(['X-AgroMind-Secret' => $secret]);
+            }
+            $resp = $http->post($url, $payload);
             $json = $resp->json();
             $text = is_array($json) ? ($json['response'] ?? null) : null;
             if (! $resp->successful() || ! is_string($text) || trim($text) === '') {
