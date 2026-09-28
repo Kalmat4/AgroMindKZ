@@ -32,6 +32,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'telegram_link_token',
     ];
 
     /**
@@ -50,5 +51,10 @@ class User extends Authenticatable
     public function zone(): HasOne
     {
         return $this->hasOne(Zone::class);
+    }
+
+    public function fields(): HasMany
+    {
+        return $this->hasMany(Field::class);
     }
 }

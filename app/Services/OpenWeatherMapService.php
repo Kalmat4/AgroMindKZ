@@ -14,7 +14,7 @@ class OpenWeatherMapService
     {
         $lat      = round($lat, 5);
         $lon      = round($lon, 5);
-        $cacheKey = "owm:forecast:{$lat},{$lon}";
+        $cacheKey = "owm:forecast:v2:{$lat},{$lon}"; // v2 — с индексом пожароопасности
 
         $cached = Cache::get($cacheKey);
         if ($cached !== null) {
@@ -77,13 +77,17 @@ class OpenWeatherMapService
             $windGust  = $wind['gust'] ?? $windSpeed;
             $maxWind = max($maxWind, $windGust);
 
+            $humidity = $main['humidity'] ?? null;
             $period = [
                 'dt'       => $dt,
                 'date'     => $item['dt_txt'] ?? '',
                 'temp'     => round($temp, 1),
+                'humidity' => $humidity,
                 'rain'     => round($rain, 1),
                 'wind'     => round($windSpeed, 1),
+                'wind_deg' => $wind['deg'] ?? null,
                 'gust'     => round($windGust, 1),
+                'hdw'      => $humidity === null ? null : round(FireDanger::hdw($temp, $humidity, $windSpeed)),
                 'weather'  => $weather['description'] ?? '',
                 'icon'     => $weather['icon'] ?? '',
                 'code'     => $weatherId,
@@ -146,6 +150,16 @@ class OpenWeatherMapService
             ];
         }
 
+        $fireDanger = FireDanger::fromPeriods(array_slice($periods, 0, 16));
+        if (in_array($fireDanger['level'], ['high', 'extreme'], true)) {
+            $risks[] = [
+                'type'     => 'fire_weather',
+                'severity' => $fireDanger['level'] === 'extreme' ? 'high' : 'nominal',
+                'date'     => $fireDanger['peak_at'] ?? '',
+                'detail'   => 'индекс HDW ' . $fireDanger['index'] . ' — ' . $fireDanger['label'],
+            ];
+        }
+
         // Deduplicate by type — keep highest severity per type
         $byType = [];
         foreach ($risks as $r) {
@@ -172,6 +186,8 @@ class OpenWeatherMapService
                 'wind_max'     => round($maxWind, 1),
             ],
             'periods'    => array_slice($periods, 0, 16), // 48h of 3h periods
+            'fire_danger' => $fireDanger,
+            'wind_now'   => ['speed' => $periods[0]['wind'] ?? 0, 'deg' => $periods[0]['wind_deg'] ?? null],
         ];
     }
 

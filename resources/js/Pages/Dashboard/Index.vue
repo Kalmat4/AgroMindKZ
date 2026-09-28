@@ -2,7 +2,8 @@
 import { Head, Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import AgronomistField from '@/Components/AgronomistField.vue'
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import FieldsPanel from '@/Components/FieldsPanel.vue'
+import { ref, shallowRef, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import axios from 'axios'
 import MarkdownIt from 'markdown-it'
 import { useI18n } from 'vue-i18n'
@@ -107,7 +108,8 @@ const fireSeverityFilter = ref(null)
 const loading = ref(false)
 const errorMsg = ref(null)
 const activeTab = ref('map')
-const mapLayer = ref('fires') // 'fires' | 'forecast'
+const mapLayer = ref('fires') // 'fires' | 'forecast' | 'fields'
+const leafletMap = shallowRef(null)
 
 // ── Forecast state ──────────────────────────────────────────────────────────
 const forecastData = ref({})
@@ -120,7 +122,10 @@ const RISK_LABELS = {
     fire:        { icon: '🔥', label: 'Пожары',          color: '#ef4444' },
     strong_wind: { icon: '💨', label: 'Сильный ветер',   color: '#06b6d4' },
     frost:       { icon: '❄️', label: 'Заморозки',       color: '#93c5fd' },
+    fire_weather:{ icon: '🌡️', label: 'Пожароопасная погода', color: '#f97316' },
 }
+
+const FIRE_DANGER_COLORS = { low: '#4ade80', moderate: '#eab308', high: '#f97316', extreme: '#ef4444', unknown: '#888' }
 
 const FORECAST_MARKER_COLORS = { high: '#ef4444', nominal: '#f59e0b', low: '#4ade80' }
 
@@ -211,6 +216,7 @@ function renderForecastMarker(oblast, data) {
         `<div style="font-family:sans-serif;font-size:13px;line-height:1.6;min-width:200px">` +
         `<b>${oblast.name}</b><br>` +
         `🌡️ ${s?.temp_min}…${s?.temp_max}°C &nbsp; 💧 ${s?.precip_total} мм &nbsp; 💨 ${s?.wind_max} м/с<br>` +
+        (data.forecast?.fire_danger?.index != null ? `🔥 Пожароопасность: <b style="color:${FIRE_DANGER_COLORS[data.forecast.fire_danger.level]}">${data.forecast.fire_danger.label}</b> (HDW ${data.forecast.fire_danger.index})<br>` : '') +
         (riskLines ? `<hr style="border-color:#333;margin:4px 0">${riskLines}` : `<span style="color:#4ade80">✅ Рисков не обнаружено</span>`) +
         `</div>`
     )
@@ -514,6 +520,7 @@ const fireActiveMarkerStyle   = () => ({ radius: 11, color: '#fff', weight: 2, f
 // ── Map init ──────────────────────────────────────────────────────────────────
 function initMap() {
     map = L.map(mapEl.value, { center: [41.0, 62.0], zoom: 4 })
+    leafletMap.value = map
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
@@ -926,6 +933,9 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                 <button class="afs-layer-btn" :class="{ 'afs-layer-btn--active': mapLayer === 'forecast' }" @click="switchMapLayer('forecast')">
                     ⛈️ Прогноз угроз
                 </button>
+                <button class="afs-layer-btn" :class="{ 'afs-layer-btn--active': mapLayer === 'fields' }" @click="switchMapLayer('fields')">
+                    🌾 Мои поля
+                </button>
             </div>
         </div>
 
@@ -1009,9 +1019,11 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
 
                 <div ref="mapEl" class="afs-map"></div>
 
+                <FieldsPanel v-if="leafletMap" :map="leafletMap" :active="activeTab === 'map' && mapLayer === 'fields'" />
+
                 <!-- Return to saved zone button -->
                 <button
-                    v-if="savedZone && !subscribeMode && selectedOblast?.name !== savedZone.oblast_name"
+                    v-if="savedZone && !subscribeMode && mapLayer !== 'fields' && selectedOblast?.name !== savedZone.oblast_name"
                     class="afs-return-zone-btn"
                     @click="goToSavedZone"
                 >
@@ -1067,7 +1079,7 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                 </div>
 
                 <!-- Placeholder when nothing selected -->
-                <div v-if="!selectedOblast && !loading" class="afs-map-hint">
+                <div v-if="!selectedOblast && !loading && mapLayer !== 'fields'" class="afs-map-hint">
                     Выберите регион на карте или в списке слева
                 </div>
 
@@ -1076,6 +1088,20 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                     <div class="afs-rp__header">
                         <span class="afs-rp__title">⛈️ {{ selectedOblast.name.toUpperCase() }}</span>
                         <button class="afs-rp__close" @click="backToOblasts" title="Закрыть">×</button>
+                    </div>
+
+                    <!-- Fire danger -->
+                    <div v-if="selectedForecast?.forecast?.fire_danger" class="afs-rp__section">
+                        <div class="afs-rp__section-title">Пожароопасность погоды (48 ч)</div>
+                        <div class="afs-fd">
+                            <span class="afs-fd__level" :style="{ color: FIRE_DANGER_COLORS[selectedForecast.forecast.fire_danger.level] }">
+                                {{ selectedForecast.forecast.fire_danger.label.toUpperCase() }}
+                            </span>
+                            <span v-if="selectedForecast.forecast.fire_danger.index !== null" class="afs-fd__index">
+                                индекс HDW {{ selectedForecast.forecast.fire_danger.index }}
+                            </span>
+                        </div>
+                        <p class="afs-rp__update-text">Жара × сухость воздуха × ветер по прогнозу OpenWeatherMap (Hot-Dry-Windy Index)</p>
                     </div>
 
                     <!-- Weather summary -->
@@ -2428,6 +2454,10 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
     border-bottom: 1px solid #222;
 }
 .afs-rp__section:last-of-type { border-bottom: none; }
+
+.afs-fd { display: flex; align-items: baseline; gap: 10px; }
+.afs-fd__level { font-size: 16px; font-weight: 800; }
+.afs-fd__index { font-size: 11px; color: #888; }
 
 .afs-rp__section-title {
     font-size: 10px;

@@ -38,7 +38,9 @@ return [
     'telegram' => [
         'token' => env('TG_TOKEN', ''),
         'almat' => env('ALMAT_CHAT_ID', 0),
-        'beka' => env('BEKA_CHAT_ID', 0)
+        'beka' => env('BEKA_CHAT_ID', 0),
+        'webhook_secret' => env('TG_WEBHOOK_SECRET'),
+        'bot_username' => env('TG_BOT_USERNAME', 'AgriFireShieldbot'),
     ],
 
     'firms' => [
