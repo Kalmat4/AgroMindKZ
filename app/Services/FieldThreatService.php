@@ -99,7 +99,7 @@ class FieldThreatService
             'crop'          => $crop?->name_ru,
             'yield_c_ha'    => $yield ? (float) $yield->yield_centner_ha : null,
             'yield_year'    => $yield?->harvest_year,
-            'tons'          => $tons === null ? null : round($tons),
+            'tons'          => $tons === null ? null : round($tons, $tons < 100 ? 1 : 0),
             'price_per_ton' => $field->price_per_ton,
             'tenge'         => $tons !== null && $field->price_per_ton ? (int) round($tons * $field->price_per_ton) : null,
         ];
