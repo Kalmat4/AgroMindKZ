@@ -801,7 +801,7 @@ function renderHotspots(spots) {
         })
             .bindPopup(
                 `<div style="font-family:sans-serif;font-size:13px;line-height:1.7;min-width:200px">` +
-                `<b style="font-size:14px">🔥 Термоточка (возможный пожар)</b><br>` +
+                `<b style="font-size:14px">${spot.kind === 'stubble' ? '🌾 Вероятный пал стерни' : '🔥 Термоточка (возможный пожар)'}</b><br>` +
                 `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${cfg.color}22;color:${cfg.color};border:1px solid ${cfg.color}55;margin:2px 0">` +
                 `${cfg.label}</span><br>` +
                 `<span style="color:#e05050">📅 Снимок:</span> <b>${formatSpotDateTime(spot)}</b><br>` +
@@ -809,7 +809,9 @@ function renderHotspots(spots) {
                 `🌡️ Нагрев пикселя 375 м: ${spot.brightness} K (≈${Math.round(spot.brightness - 273.15)} °C)<br>` +
                 `🎯 Достоверность: ${confidenceLabel(spot.confidence)}<br>` +
                 `🛰️ ${satelliteName(spot.satellite)}, ${spot.daynight === 'D' ? 'дневной' : 'ночной'} пролёт<br>` +
-                `<a href="/data#firms" target="_blank" style="font-size:11px">Что значат эти данные?</a>` +
+                (spot.land_label ? `🗺️ Под точкой: <b>${spot.land_label}</b><br>` : '') +
+                (spot.kind === 'stubble' ? `<span style="font-size:11px;color:#888">${spot.kind_reasons.join(' · ')}</span><br>` : '') +
+                `<a href="/data#${spot.kind === 'stubble' ? 'stubble' : 'firms'}" target="_blank" style="font-size:11px">Что значат эти данные?</a>` +
                 `</div>`
             )
             .addTo(hotspotLayer)
@@ -1208,6 +1210,9 @@ onBeforeUnmount(() => { map?.remove(); closeCamera() })
                         </div>
                         <div v-else class="afs-rp__fire-block">
                             <span class="afs-rp-badge afs-rp-badge--red">🔥 Обнаружено очагов: {{ filteredHotspots.length }}</span>
+                            <span v-if="filteredHotspots.some(s => s.kind === 'stubble')" class="afs-rp-badge afs-rp-badge--yellow">
+                                🌾 из них похоже на палы стерни: {{ filteredHotspots.filter(s => s.kind === 'stubble').length }}
+                            </span>
                             <span :class="fireBadgeClass(filteredHotspots.length)">{{ fireRiskLabel(filteredHotspots.length) }}</span>
                             <div class="afs-rp__severity-breakdown">
                                 <span class="afs-rp-badge afs-rp-badge--yellow afs-sev-mini">

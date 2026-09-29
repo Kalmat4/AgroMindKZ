@@ -12,13 +12,15 @@ class NasaFirmsService
     private const DAYS      = 2;
     private const CACHE_TTL = 600; // FIRMS обновляется несколько раз в сутки, 10 минут хватает
 
+    public function __construct(private FireKindClassifier $kinds) {}
+
     /**
      * Очаги за 48 часов в bbox. null — FIRMS не ответил (это не то же самое, что «очагов нет»).
      */
     public function getHotspots(float $west, float $south, float $east, float $north): ?array
     {
         $area     = implode(',', [$west, $south, $east, $north]);
-        $cacheKey = 'firms:' . self::SOURCE . ':' . $area;
+        $cacheKey = 'firms:v2:' . self::SOURCE . ':' . $area; // v2 — с типом земли и признаком пала
 
         $cached = Cache::get($cacheKey);
         if ($cached !== null) {
@@ -48,8 +50,10 @@ class NasaFirmsService
                 return null;
             }
 
-            $hotspots = $this->parseCsv($body);
-            Cache::put($cacheKey, $hotspots, self::CACHE_TTL);
+            $hotspots = $this->kinds->classify($this->parseCsv($body));
+            // Пока плитки карты земель догружаются, часть точек без типа земли — такой ответ держим недолго
+            $complete = ! array_filter($hotspots, fn($s) => $s['land'] === null);
+            Cache::put($cacheKey, $hotspots, $complete ? self::CACHE_TTL : 60);
 
             return $hotspots;
         } catch (\Throwable $e) {

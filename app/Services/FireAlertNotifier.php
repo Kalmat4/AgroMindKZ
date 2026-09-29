@@ -59,6 +59,9 @@ class FireAlertNotifier
             $icon  = $top['level'] === 'critical' ? '🚨' : '🔥';
             $lines = ["{$icon} <b>" . mb_strtoupper(FieldThreatService::levelLabel($top['level'])) . ": {$e($field->name)}</b>"];
             $lines[] = "Очаг в <b>{$top['distance_km']} км</b> к {$top['direction']} от поля (NASA FIRMS, {$top['detected_at']}).";
+            if (($top['kind'] ?? null) === 'stubble') {
+                $lines[] = '🌾 Похоже на пал стерни на соседней пашне — такие палы часто уходят в степь.';
+            }
             if ($top['downwind']) {
                 $lines[] = "💨 Ветер {$a['wind']['speed']} м/с дует <b>от очага на поле</b>"
                     . ($top['eta_hours'] !== null ? ", огонь может подойти примерно через <b>{$top['eta_hours']} ч</b> (грубая оценка)." : '.');

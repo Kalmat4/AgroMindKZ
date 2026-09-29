@@ -340,6 +340,9 @@ function tenge(n) {
                         <b>{{ t.distance_km }} км</b> к {{ t.direction }}
                         <span v-if="t.downwind" class="fp-red"> · ветер на поле<template v-if="t.eta_hours"> · подход ~{{ t.eta_hours }} ч</template></span>
                         <span v-else class="fp-muted"> · ветер не на поле</span>
+                        <div v-if="t.own_field || t.kind === 'stubble'" class="fp-muted">
+                            {{ t.own_field ? '📍 на вашем поле — вероятно, ваш пал' : '🌾 похоже на пал стерни' }}<template v-if="t.land_label"> · {{ t.land_label }}</template>
+                        </div>
                         <div class="fp-muted">{{ t.detected_at }} · FRP {{ t.frp }} МВт</div>
                     </div>
                 </template>

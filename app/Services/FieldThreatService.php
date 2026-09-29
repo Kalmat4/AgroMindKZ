@@ -37,6 +37,9 @@ class FieldThreatService
         $wind   = $weather['wind_now'] ?? ['speed' => 0, 'deg' => null];
         $danger = $weather['fire_danger'] ?? ['level' => 'unknown', 'label' => 'нет данных', 'index' => null];
 
+        // Поле у нас — точка и площадь: считаем его кругом той же площади плюс полпикселя спутника (375 м)
+        $ownRadiusKm = sqrt($field->area_ha * 10000 / M_PI) / 1000 + 0.2;
+
         $threats = [];
         foreach ($spots ?? [] as $s) {
             $distance = $this->distanceKm($s['lat'], $s['lon'], $field->lat, $field->lon);
@@ -45,7 +48,9 @@ class FieldThreatService
             }
             $bearing  = $this->bearing($s['lat'], $s['lon'], $field->lat, $field->lon); // куда идти от очага к полю
             $downwind = $this->isDownwind($wind, $bearing);
-            $level    = $this->levelFor($distance, $downwind, $danger['level']);
+            // Огонь на собственном поле фермер, скорее всего, развёл сам — тревогой это не считаем
+            $ownField = $distance <= $ownRadiusKm;
+            $level    = $ownField ? 'watch' : $this->levelFor($distance, $downwind, $danger['level']);
 
             $spreadKmh = $wind['speed'] * 3.6 * self::SPREAD_SHARE_OF_WIND;
             $threats[] = [
@@ -60,6 +65,9 @@ class FieldThreatService
                 'severity'    => $s['severity'],
                 'detected_at' => trim(($s['acq_date'] ?? '') . ' ' . $this->formatTime($s['acq_time'] ?? '')) . ' UTC',
                 'level'       => $level,
+                'kind'        => $s['kind'] ?? 'fire',
+                'land_label'  => $s['land_label'] ?? null,
+                'own_field'   => $ownField,
             ];
         }
 
@@ -74,6 +82,7 @@ class FieldThreatService
             'weather_ok'  => $weather !== null,
             'radius_km'   => self::RADIUS_KM,
             'hotspots'    => count($threats),
+            'stubble'     => count(array_filter($threats, fn($t) => $t['kind'] === 'stubble')),
             'threats'     => array_slice($threats, 0, 10),
             'nearest'     => $threats ? min(array_column($threats, 'distance_km')) : null,
             'wind'        => ['speed' => $wind['speed'], 'deg' => $wind['deg'], 'from' => $wind['deg'] === null ? null : $this->compass($wind['deg'])],
